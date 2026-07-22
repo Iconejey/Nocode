@@ -656,6 +656,21 @@ func (h *BufPane) VSplitIndex(buf *buffer.Buffer, right bool) *BufPane {
 		currentPaneIdx++
 	}
 	h.tab.AddPane(e, currentPaneIdx)
+
+	var sidebar *SidebarPane
+	for _, p := range h.tab.Panes {
+		if s_pane, ok := p.(*SidebarPane); ok {
+			sidebar = s_pane
+			break
+		}
+	}
+	if sidebar != nil {
+		node := h.tab.GetNode(sidebar.ID())
+		if node != nil {
+			node.ResizeSplit(32)
+		}
+	}
+
 	h.tab.Resize()
 	h.tab.SetActive(currentPaneIdx)
 	return e
@@ -807,6 +822,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"StartOfLine":               (*BufPane).StartOfLine,
 	"EndOfLine":                 (*BufPane).EndOfLine,
 	"ToggleHelp":                (*BufPane).ToggleHelp,
+	"ToggleSidebar":             (*BufPane).ToggleSidebar,
 	"ToggleKeyMenu":             (*BufPane).ToggleKeyMenu,
 	"ToggleDiffGutter":          (*BufPane).ToggleDiffGutter,
 	"ToggleRuler":               (*BufPane).ToggleRuler,

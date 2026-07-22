@@ -303,6 +303,36 @@ func (h *BufPane) PwdCmd(args []string) {
 // OpenCmd opens a new buffer with a given filename
 func (h *BufPane) OpenCmd(args []string) {
 	if len(args) > 0 {
+		path, err := util.ReplaceHome(args[0])
+		if err == nil {
+			info, serr := os.Stat(path)
+			if serr == nil && info.IsDir() {
+				WorkspaceDir = path
+				var sidebar *SidebarPane
+				for _, p := range h.tab.Panes {
+					if s_pane, ok := p.(*SidebarPane); ok {
+						sidebar = s_pane
+						break
+					}
+				}
+				if sidebar != nil {
+					sidebar.root_dir = path
+					sidebar.root_node = &FileNode{
+						name:    filepath.Base(path),
+						path:    path,
+						is_dir:  true,
+						is_open: true,
+					}
+					sidebar.loadNodeChildren(sidebar.root_node)
+					sidebar.scroll_y = 0
+					sidebar.selected_y = 0
+				} else {
+					h.tab.initSidebar(path)
+				}
+				return
+			}
+		}
+
 		open := func() {
 			b, err := buffer.NewBufferFromFile(args[0], buffer.BTDefault)
 			if err != nil {

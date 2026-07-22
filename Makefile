@@ -1,4 +1,4 @@
-.PHONY: runtime build generate build-quick
+.PHONY: runtime build generate build-quick release
 
 VERSION = $(shell GOOS=$(shell go env GOHOSTOS) GOARCH=$(shell go env GOHOSTARCH) \
 	go run tools/build-version.go)
@@ -76,3 +76,7 @@ bench-compare:
 
 clean:
 	rm -f micro
+
+release: build
+	rm -f /home/nicolas/.local/bin/nocode
+	cp nocode /home/nicolas/.local/bin/nocode

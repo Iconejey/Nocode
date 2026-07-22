@@ -1842,6 +1842,27 @@ func (h *BufPane) ToggleHelp() bool {
 	return true
 }
 
+// ToggleSidebar opens or closes the sidebar on the current tab
+func (h *BufPane) ToggleSidebar() bool {
+	var sidebar *SidebarPane
+	for _, p := range h.tab.Panes {
+		if s_pane, ok := p.(*SidebarPane); ok {
+			sidebar = s_pane
+			break
+		}
+	}
+	if sidebar != nil {
+		sidebar.Quit()
+	} else {
+		dir := WorkspaceDir
+		if dir == "" {
+			dir, _ = os.Getwd()
+		}
+		h.tab.initSidebar(dir)
+	}
+	return true
+}
+
 // ToggleKeyMenu toggles the keymenu option and resizes all tabs
 func (h *BufPane) ToggleKeyMenu() bool {
 	config.GlobalSettings["keymenu"] = !config.GetGlobalOption("keymenu").(bool)

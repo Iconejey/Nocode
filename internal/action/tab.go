@@ -210,6 +210,18 @@ func (t *TabList) CloseTerms() {
 var Tabs *TabList
 
 func InitTabs(bufs []*buffer.Buffer) {
+	if WorkspaceDir != "" && len(bufs) == 1 && bufs[0].Path == "" {
+		w, h := screen.Screen.Size()
+		iOffset := config.GetInfoBarOffset()
+		Tabs = new(TabList)
+		Tabs.TabWindow = display.NewTabWindow(w, 0)
+		Tabs.Names = []string{}
+		Tabs.List = []*Tab{NewTabWithSidebarOnly(0, 0, w, h-1-iOffset, WorkspaceDir)}
+		Tabs.UpdateNames()
+		screen.RestartCallback = Tabs.ResetMouse
+		return
+	}
+
 	multiopen := config.GetGlobalOption("multiopen").(string)
 	if multiopen == "tab" {
 		Tabs = NewTabList(bufs)
@@ -222,6 +234,10 @@ func InitTabs(bufs []*buffer.Buffer) {
 				MainTab().CurPane().HSplitBuf(b)
 			}
 		}
+	}
+
+	if WorkspaceDir != "" {
+		MainTab().initSidebar(WorkspaceDir)
 	}
 
 	screen.RestartCallback = Tabs.ResetMouse
@@ -385,6 +401,20 @@ func (t *Tab) RemovePane(i int) {
 
 // Resize resizes all panes according to their corresponding split nodes
 func (t *Tab) Resize() {
+	var sidebar *SidebarPane
+	for _, p := range t.Panes {
+		if s_pane, ok := p.(*SidebarPane); ok {
+			sidebar = s_pane
+			break
+		}
+	}
+	if sidebar != nil && len(t.Panes) > 1 {
+		node := t.GetNode(sidebar.ID())
+		if node != nil {
+			node.ResizeSplit(32)
+		}
+	}
+
 	for _, p := range t.Panes {
 		n := t.GetNode(p.ID())
 		pv := p.GetView()

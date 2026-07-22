@@ -57,6 +57,10 @@ var bufdefaults = map[string]string{
 	"Ctrl-t":         "AddTab",
 	"Ctrl-Shift-T":   "AddTab",
 	"CtrlShiftT":     "AddTab",
+	"Alt-b":          "ToggleSidebar",
+	"Alt-B":          "ToggleSidebar",
+	"AltB":           "ToggleSidebar",
+	"Altb":           "ToggleSidebar",
 	"Alt-v":          "VSplit",
 	"Alt-,":          "PreviousTab|LastTab",
 	"Alt-.":          "NextTab|FirstTab",
@@ -89,7 +93,6 @@ var bufdefaults = map[string]string{
 
 	// Emacs-style keybindings
 	"Alt-f": "WordRight",
-	"Alt-b": "WordLeft",
 	"Alt-a": "StartOfText",
 	"Alt-e": "EndOfLine",
 	// "Alt-p": "CursorUp",

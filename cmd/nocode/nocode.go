@@ -429,6 +429,19 @@ func main() {
 	action.InitGlobals()
 	buffer.SetMessager(action.InfoBar)
 	args := flag.Args()
+	var new_args []string
+	for _, arg := range args {
+		path, err := util.ReplaceHome(arg)
+		if err == nil {
+			info, serr := os.Stat(path)
+			if serr == nil && info.IsDir() {
+				action.WorkspaceDir = path
+				continue
+			}
+		}
+		new_args = append(new_args, arg)
+	}
+	args = new_args
 	b := LoadInput(args)
 
 	if len(b) == 0 {
