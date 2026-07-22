@@ -96,7 +96,7 @@ var defaultCommonSettings = map[string]any{
 	"splitbottom":     true,
 	"splitright":      true,
 	"statusformatl":   "$(filename) $(modified)$(overwrite)($(line),$(col)) $(status.paste)| ft:$(opt:filetype) | $(opt:fileformat) | $(opt:encoding)",
-	"statusformatr":   "$(bind:ToggleKeyMenu): bindings, $(bind:ToggleHelp): help",
+	"statusformatr":   "",
 	"statusline":      true,
 	"syntax":          true,
 	"tabmovement":     false,
