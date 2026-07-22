@@ -1,0 +1,44 @@
+# VS Code Material Theme Darker Custom Colorscheme for Micro
+
+color-link default "#c6c6c6"
+color-link comment "#474747"
+
+color-link identifier "#82AAFF"
+color-link identifier.class "#FFCB6B"
+color-link identifier.var "#EEFFFF"
+
+color-link constant "#F78C6C"
+color-link constant.string "#C3E88D"
+color-link constant.string.char "#C3E88D"
+color-link constant.number "#F78C6C"
+color-link constant.bool "#F78C6C"
+
+color-link statement "#C792EA"
+color-link preproc "#C792EA"
+color-link type "#FFCB6B"
+color-link special "#89DDFF"
+
+color-link symbol "#89DDFF"
+color-link symbol.brackets "#89DDFF"
+color-link symbol.tag "#F07178"
+
+color-link error "bold #F07178"
+color-link todo "bold #FFCB6B"
+
+color-link hlsearch "#ffffff,#3e4534"
+color-link selection "#ffffff,#474747"
+
+color-link identifier.function "#82AAFF"
+
+color-link indent-char "#474747"
+color-link line-number "#474747"
+color-link current-line-number "#82AAFF"
+color-link cursor-line "#242424"
+color-link divider "#242424,#242424"
+
+color-link statusline "#c6c6c6"
+color-link tabbar "#c6c6c6"
+
+color-link diff-added "#82aaff"
+color-link diff-modified "#82aaff"
+color-link diff-deleted "#f07178"

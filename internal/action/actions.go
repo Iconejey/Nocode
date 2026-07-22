@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1049,6 +1052,7 @@ func (h *BufPane) saveBufToFile(filename string, action string, callback func())
 					InfoBar.Error(err)
 				} else {
 					InfoBar.Message("Saved " + filename)
+					h.runPrettier(filename)
 					if callback != nil {
 						callback()
 					}
@@ -1073,6 +1077,7 @@ func (h *BufPane) saveBufToFile(filename string, action string, callback func())
 		}
 	} else {
 		InfoBar.Message("Saved " + filename)
+		h.runPrettier(filename)
 		if callback != nil {
 			callback()
 		}
@@ -2345,4 +2350,185 @@ func (h *BufPane) RemoveAllMultiCursors() bool {
 // None is an action that does nothing
 func (h *BufPane) None() bool {
 	return true
+}
+
+func (h *BufPane) runPrettier(filename string) {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if len(ext) > 1 {
+		ext = ext[1:]
+	}
+	prettierExtensions := map[string]bool{
+		"js": true, "jsx": true, "mjs": true, "cjs": true,
+		"ts": true, "tsx": true, "mts": true, "cts": true,
+		"css": true, "scss": true, "less": true,
+		"html": true, "vue": true,
+		"json": true, "json5": true,
+		"md": true, "markdown": true,
+		"yaml": true, "yml": true,
+		"graphql": true, "gql": true,
+	}
+	if prettierExtensions[ext] {
+		cmd := exec.Command("prettier", "--write", "--log-level", "silent", filename)
+		if err := cmd.Run(); err == nil {
+			h.ReOpen()
+		}
+	}
+}
+
+// ScrollLeft scrolls the view left by 4 columns
+func (h *BufPane) ScrollLeft() bool {
+	v := h.GetView()
+	scrollAmount := 4
+	if v.StartCol > scrollAmount {
+		v.StartCol -= scrollAmount
+	} else {
+		v.StartCol = 0
+	}
+	h.SetView(v)
+	return true
+}
+
+// ScrollRight scrolls the view right by 4 columns
+func (h *BufPane) ScrollRight() bool {
+	v := h.GetView()
+	scrollAmount := 4
+	v.StartCol += scrollAmount
+	h.SetView(v)
+	return true
+}
+
+// SpawnKittyTab launches a new kitty tab running the nono program with the selection range
+func (h *BufPane) SpawnKittyTab() bool {
+	if !h.Cursor.HasSelection() {
+		return true
+	}
+	firstY := h.Cursor.CurSelection[0].Y
+	secondY := h.Cursor.CurSelection[1].Y
+	var startLine, endLine int
+	if firstY < secondY {
+		startLine = firstY + 1
+		endLine = secondY + 1
+	} else {
+		startLine = secondY + 1
+		endLine = firstY + 1
+	}
+	home := os.Getenv("HOME")
+	nonoPath := filepath.Join(home, ".local/bin/nono")
+	argStr := fmt.Sprintf("%s:%d-%d", h.Buf.AbsPath, startLine, endLine)
+
+	runTabCommand([]string{nonoPath, "-f", argStr})
+	return true
+}
+
+// RunNomark runs the nomark program in a new terminal tab
+func (h *BufPane) RunNomark() bool {
+	absPath := h.Buf.AbsPath
+	if absPath == "" {
+		return true
+	}
+	if h.Buf.Modified() {
+		_ = h.Buf.Save()
+	}
+	cmdArgs := []string{"zsh", "-ic", fmt.Sprintf("nomark %q; exec zsh", absPath)}
+	runTabCommand(cmdArgs)
+	return true
+}
+
+func detectTerminal() string {
+	pid := os.Getppid()
+	for i := 0; i < 5; i++ {
+		if pid <= 1 {
+			break
+		}
+		comm, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
+		if err != nil {
+			break
+		}
+		name := strings.TrimSpace(string(comm))
+		switch name {
+		case "kitty", "gnome-terminal", "gnome-terminal-", "gnome-terminal-server", "kgx", "gnome-console", "konsole", "wezterm-gui", "wezterm", "alacritty", "xfce4-terminal", "foot":
+			return name
+		}
+
+		status, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+		if err != nil {
+			break
+		}
+		str := string(status)
+		idx := strings.LastIndex(str, ")")
+		if idx == -1 || idx+2 >= len(str) {
+			break
+		}
+		parts := strings.Fields(str[idx+2:])
+		if len(parts) < 2 {
+			break
+		}
+		ppid, err := strconv.Atoi(parts[1])
+		if err != nil {
+			break
+		}
+		pid = ppid
+	}
+	if strings.Contains(os.Getenv("TERM"), "kitty") {
+		return "kitty"
+	}
+	if os.Getenv("TERM_PROGRAM") == "WezTerm" {
+		return "wezterm"
+	}
+	if os.Getenv("GNOME_TERMINAL_SCREEN") != "" {
+		return "gnome-terminal"
+	}
+	return "unknown"
+}
+
+func runTabCommand(cmdArgs []string) {
+	term := detectTerminal()
+	var execCmd *exec.Cmd
+
+	switch term {
+	case "kitty":
+		args := append([]string{"@", "launch", "--type=tab"}, cmdArgs...)
+		execCmd = exec.Command("kitten", args...)
+	case "gnome-terminal", "gnome-terminal-", "gnome-terminal-server":
+		args := append([]string{"--tab", "--"}, cmdArgs...)
+		execCmd = exec.Command("gnome-terminal", args...)
+	case "kgx", "gnome-console":
+		args := append([]string{"--tab", "--"}, cmdArgs...)
+		execCmd = exec.Command("kgx", args...)
+	case "konsole":
+		args := append([]string{"--new-tab", "-e"}, cmdArgs...)
+		execCmd = exec.Command("konsole", args...)
+	case "wezterm", "wezterm-gui":
+		args := append([]string{"cli", "spawn", "--new-tab", "--"}, cmdArgs...)
+		execCmd = exec.Command("wezterm", args...)
+	case "alacritty":
+		args := append([]string{"-e"}, cmdArgs...)
+		execCmd = exec.Command("alacritty", args...)
+	case "xfce4-terminal":
+		args := append([]string{"--tab", "-e"}, strings.Join(cmdArgs, " "))
+		execCmd = exec.Command("xfce4-terminal", args...)
+	case "foot":
+		args := append([]string{"-e"}, cmdArgs...)
+		execCmd = exec.Command("foot", args...)
+	default:
+		if _, err := exec.LookPath("gnome-terminal"); err == nil {
+			args := append([]string{"--tab", "--"}, cmdArgs...)
+			execCmd = exec.Command("gnome-terminal", args...)
+		} else if _, err := exec.LookPath("kgx"); err == nil {
+			args := append([]string{"--tab", "--"}, cmdArgs...)
+			execCmd = exec.Command("kgx", args...)
+		} else if _, err := exec.LookPath("kitty"); err == nil {
+			args := append([]string{"@", "launch", "--type=tab"}, cmdArgs...)
+			execCmd = exec.Command("kitten", args...)
+		} else if _, err := exec.LookPath("wezterm"); err == nil {
+			args := append([]string{"cli", "spawn", "--new-tab", "--"}, cmdArgs...)
+			execCmd = exec.Command("wezterm", args...)
+		} else {
+			return
+		}
+	}
+
+	if execCmd != nil {
+		_ = execCmd.Start()
+	}
 }

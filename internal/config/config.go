@@ -10,14 +10,14 @@ import (
 
 var ConfigDir string
 
-// InitConfigDir finds the configuration directory for micro according to the XDG spec.
+// InitConfigDir finds the configuration directory for nocode according to the XDG spec.
 // If no directory is found, it creates one.
 func InitConfigDir(flagConfigDir string) error {
 	var e error
 
-	microHome := os.Getenv("MICRO_CONFIG_HOME")
-	if microHome == "" {
-		// The user has not set $MICRO_CONFIG_HOME so we'll try $XDG_CONFIG_HOME
+	nocodeHome := os.Getenv("NOCODE_CONFIG_HOME")
+	if nocodeHome == "" {
+		// The user has not set $NOCODE_CONFIG_HOME so we'll try $XDG_CONFIG_HOME
 		xdgHome := os.Getenv("XDG_CONFIG_HOME")
 		if xdgHome == "" {
 			// The user has not set $XDG_CONFIG_HOME so we should act like it was set to ~/.config
@@ -28,9 +28,9 @@ func InitConfigDir(flagConfigDir string) error {
 			xdgHome = filepath.Join(home, ".config")
 		}
 
-		microHome = filepath.Join(xdgHome, "micro")
+		nocodeHome = filepath.Join(xdgHome, "nocode")
 	}
-	ConfigDir = microHome
+	ConfigDir = nocodeHome
 
 	if len(flagConfigDir) > 0 {
 		if _, err := os.Stat(flagConfigDir); os.IsNotExist(err) {

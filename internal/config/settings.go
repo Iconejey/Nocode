@@ -59,7 +59,7 @@ var defaultCommonSettings = map[string]any{
 	"backupdir":       "",
 	"basename":        false,
 	"colorcolumn":     float64(0),
-	"cursorline":      true,
+	"cursorline":      false,
 	"detectlimit":     float64(100),
 	"diffgutter":      false,
 	"encoding":        "utf-8",
@@ -102,7 +102,7 @@ var defaultCommonSettings = map[string]any{
 	"tabmovement":     false,
 	"tabsize":         float64(4),
 	"tabstospaces":    false,
-	"truecolor":       "auto",
+	"truecolor":       "on",
 	"useprimary":      true,
 	"wordwrap":        false,
 }
@@ -112,7 +112,7 @@ var defaultCommonSettings = map[string]any{
 var DefaultGlobalOnlySettings = map[string]any{
 	"autosave":       float64(0),
 	"clipboard":      "external",
-	"colorscheme":    "default",
+	"colorscheme":    "vscode-custom",
 	"divchars":       "|-",
 	"divreverse":     true,
 	"fakecursor":     defaultFakeCursor(),

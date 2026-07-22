@@ -11,7 +11,7 @@ DEBUGVAR = -X github.com/micro-editor/micro/v2/internal/util.Debug=ON
 VSCODE_TESTS_BASE_URL = 'https://raw.githubusercontent.com/microsoft/vscode/e6a45f4242ebddb7aa9a229f85555e8a3bd987e2/src/vs/editor/test/common/model/'
 CGO_ENABLED := $(if $(CGO_ENABLED),$(CGO_ENABLED),0)
 
-ADDITIONAL_GO_LINKER_FLAGS := ""
+ADDITIONAL_GO_LINKER_FLAGS =
 GOHOSTOS = $(shell go env GOHOSTOS)
 ifeq ($(GOHOSTOS), darwin)
 	# Native darwin resp. macOS builds need external and dynamic linking
@@ -24,17 +24,17 @@ endif
 build: generate build-quick
 
 build-quick:
-	CGO_ENABLED=$(CGO_ENABLED) go build -trimpath -ldflags "-s -w $(GOVARS) $(ADDITIONAL_GO_LINKER_FLAGS)" ./cmd/micro
+	CGO_ENABLED=$(CGO_ENABLED) go build -trimpath -ldflags "-s -w $(GOVARS) $(ADDITIONAL_GO_LINKER_FLAGS)" -o nocode ./cmd/nocode
 
 build-dbg:
-	CGO_ENABLED=$(CGO_ENABLED) go build -trimpath -ldflags "$(ADDITIONAL_GO_LINKER_FLAGS) $(DEBUGVAR)" ./cmd/micro
+	CGO_ENABLED=$(CGO_ENABLED) go build -trimpath -ldflags "$(ADDITIONAL_GO_LINKER_FLAGS) $(DEBUGVAR)" -o nocode ./cmd/nocode
 
 build-tags: fetch-tags build
 
 build-all: build
 
 install: generate
-	go install -ldflags "-s -w $(GOVARS) $(ADDITIONAL_GO_LINKER_FLAGS)" ./cmd/micro
+	go install -ldflags "-s -w $(GOVARS) $(ADDITIONAL_GO_LINKER_FLAGS)" ./cmd/nocode
 
 install-all: install
 
