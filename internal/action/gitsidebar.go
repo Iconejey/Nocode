@@ -58,6 +58,12 @@ type GitSidebarPane struct {
 
 	renderLines []RenderLine
 
+	branchSearchMode    bool
+	branchSearchInput   string
+	branchSearchCursor  int
+	branchSearchResults []string
+	allBranches         []string
+
 	lastRefresh time.Time
 	closed      bool
 	mutex       sync.Mutex
@@ -365,6 +371,16 @@ func (s *GitSidebarPane) rebuildRenderLines() {
 	// Note: Workspace directory title and current branch name are drawn as fixed
 	// lines at the top of the sidebar. The scrollable region starts below them.
 
+	// A0. Branch name
+	if s.isGitRepo() {
+		s.renderLines = append(s.renderLines, RenderLine{
+			text:     s.currentBranch,
+			style:    grey_style,
+			isSel:    true,
+			itemType: "branch",
+		})
+	}
+
 	// A. Commit text input
 	if s.currentBranch != "" && len(s.stagedFiles) > 0 {
 		s.renderLines = append(s.renderLines, RenderLine{
@@ -495,7 +511,17 @@ func (s *GitSidebarPane) rebuildRenderLines() {
 		for i, line := range s.renderLines {
 			if line.isSel {
 				s.selected_y = i
-				break
+				if line.itemType != "branch" {
+					break
+				}
+			}
+		}
+		if s.selected_y == -1 {
+			for i, line := range s.renderLines {
+				if line.isSel {
+					s.selected_y = i
+					break
+				}
 			}
 		}
 	}
@@ -630,6 +656,70 @@ func (s *GitSidebarPane) Display() {
 		return
 	}
 
+	if s.branchSearchMode {
+		s.Clear()
+		grey_color, _ := config.StringToColor("brightblack")
+		grey_style := config.DefStyle.Foreground(grey_color)
+
+		title := "BRANCH SEARCH"
+		for x := 0; x < s.view.Width; x++ {
+			var r rune = ' '
+			if x < len(title) {
+				r = rune(title[x])
+			}
+			screen.SetContent(s.view.X+x, s.view.Y, r, nil, grey_style)
+		}
+
+		prompt := "> "
+		input_str := prompt + s.branchSearchInput
+		input_runes := []rune(input_str)
+		white_color, _ := config.StringToColor("brightwhite")
+		white_style := config.DefStyle.Foreground(white_color)
+
+		for x := 0; x < s.view.Width; x++ {
+			var r rune = ' '
+			if x < len(input_runes) {
+				r = input_runes[x]
+			}
+			screen.SetContent(s.view.X+x, s.view.Y+1, r, nil, white_style)
+		}
+
+		// Draw cursor
+		screen.ShowCursor(s.view.X+len(prompt)+s.branchSearchCursor, s.view.Y+1)
+
+		// Line 2: Empty line
+		for x := 0; x < s.view.Width; x++ {
+			screen.SetContent(s.view.X+x, s.view.Y+2, ' ', nil, config.DefStyle)
+		}
+
+		// Scrollable search results starting at Line 3
+		for y := 3; y < s.view.Height; y++ {
+			index := (y - 3) + s.scroll_y
+			if index >= len(s.branchSearchResults) {
+				for x := 0; x < s.view.Width; x++ {
+					screen.SetContent(s.view.X+x, s.view.Y+y, ' ', nil, config.DefStyle)
+				}
+				continue
+			}
+
+			branchName := s.branchSearchResults[index]
+			style := white_style
+			if index == s.selected_y {
+				style = style.Reverse(true)
+			}
+
+			runes := []rune(branchName)
+			for x := 0; x < s.view.Width; x++ {
+				var r rune = ' '
+				if x < len(runes) {
+					r = runes[x]
+				}
+				screen.SetContent(s.view.X+x, s.view.Y+y, r, nil, style)
+			}
+		}
+		return
+	}
+
 	s.refreshGitStatus(false)
 	s.rebuildRenderLines()
 
@@ -651,10 +741,14 @@ func (s *GitSidebarPane) Display() {
 		screen.SetContent(s.view.X+x, s.view.Y, r, nil, grey_style)
 	}
 
-	// Fixed Line 1: Gray current branch name
+	// Fixed Line 1: Gray current branch name (keeps gray unless selected)
 	branchText := s.currentBranch
 	if branchText == "" {
 		branchText = "no git repository"
+	}
+	branchStyle := grey_style
+	if s.is_active && s.selected_y >= 0 && s.selected_y < len(s.renderLines) && s.renderLines[s.selected_y].itemType == "branch" {
+		branchStyle = grey_style.Reverse(true)
 	}
 	branch_runes := []rune(branchText)
 	for x := 0; x < s.view.Width; x++ {
@@ -662,7 +756,7 @@ func (s *GitSidebarPane) Display() {
 		if x < len(branch_runes) {
 			r = branch_runes[x]
 		}
-		screen.SetContent(s.view.X+x, s.view.Y+1, r, nil, grey_style)
+		screen.SetContent(s.view.X+x, s.view.Y+1, r, nil, branchStyle)
 	}
 
 	// Fixed Line 2: Empty line under branch name
@@ -673,17 +767,21 @@ func (s *GitSidebarPane) Display() {
 	// Scrollable lines starting at Line 3
 	for y := 3; y < s.view.Height; y++ {
 		index := (y - 3) + s.scroll_y
-		if index >= len(s.renderLines) {
+		actualIndex := index
+		if s.isGitRepo() {
+			actualIndex = index + 1
+		}
+		if actualIndex >= len(s.renderLines) {
 			for x := 0; x < s.view.Width; x++ {
 				screen.SetContent(s.view.X+x, s.view.Y+y, ' ', nil, config.DefStyle)
 			}
 			continue
 		}
 
-		line := s.renderLines[index]
+		line := s.renderLines[actualIndex]
 		style := line.style
 
-		if index == s.selected_y {
+		if actualIndex == s.selected_y {
 			style = style.Reverse(true)
 		}
 
@@ -696,7 +794,7 @@ func (s *GitSidebarPane) Display() {
 			screen.SetContent(s.view.X+x, s.view.Y+y, r, nil, style)
 		}
 
-		if s.is_active && index == s.selected_y && line.itemType == "commit" {
+		if s.is_active && actualIndex == s.selected_y && line.itemType == "commit" {
 			cursorX := s.view.X + 8 + s.commitCursor
 			if cursorX >= s.view.X+s.view.Width {
 				cursorX = s.view.X + s.view.Width - 1
@@ -749,6 +847,121 @@ func (s *GitSidebarPane) openFileInWorkspace(path string) {
 
 func (s *GitSidebarPane) HandleEvent(event tcell.Event) {
 	if s.closed {
+		return
+	}
+
+	if s.branchSearchMode {
+		if e, ok := event.(*tcell.EventKey); ok {
+			// Check ctrl+enter (ModCtrl) for new branch creation
+			if e.Key() == tcell.KeyEnter && e.Modifiers()&tcell.ModCtrl != 0 {
+				newBranchName := strings.TrimSpace(s.branchSearchInput)
+				if newBranchName != "" {
+					InfoBar.YNPrompt("Create and checkout to new branch '"+newBranchName+"'? (y,n)", func(yes, canceled bool) {
+						if !canceled && yes {
+							cmd := exec.Command("git", "checkout", "-b", newBranchName)
+							cmd.Dir = s.root_dir
+							if out, err := cmd.CombinedOutput(); err != nil {
+								InfoBar.Error("Error: " + strings.TrimSpace(string(out)))
+							} else {
+								s.branchSearchMode = false
+								s.selected_y = 0 // back to branch item
+								s.refreshGitStatus(true)
+								s.rebuildRenderLines()
+							}
+						}
+					})
+				}
+				return
+			}
+
+			switch e.Key() {
+			case tcell.KeyEscape:
+				s.branchSearchMode = false
+				s.selected_y = 0
+				s.rebuildRenderLines()
+				return
+			case tcell.KeyCtrlW:
+				s.Quit()
+				return
+			case tcell.KeyEnter:
+				if s.selected_y >= 0 && s.selected_y < len(s.branchSearchResults) {
+					targetBranch := s.branchSearchResults[s.selected_y]
+					cmd := exec.Command("git", "checkout", targetBranch)
+					cmd.Dir = s.root_dir
+					if out, err := cmd.CombinedOutput(); err != nil {
+						InfoBar.Error("Error checking out branch: " + strings.TrimSpace(string(out)))
+					} else {
+						s.branchSearchMode = false
+						s.selected_y = 0
+						s.refreshGitStatus(true)
+						s.rebuildRenderLines()
+					}
+				}
+				return
+			case tcell.KeyUp:
+				if s.selected_y > 0 {
+					s.selected_y--
+					if s.selected_y < s.scroll_y {
+						s.scroll_y = s.selected_y
+					}
+				}
+				return
+			case tcell.KeyDown:
+				if s.selected_y < len(s.branchSearchResults)-1 {
+					s.selected_y++
+					avail_height := s.view.Height - 3
+					if avail_height < 1 {
+						avail_height = 1
+					}
+					if s.selected_y >= s.scroll_y+avail_height {
+						s.scroll_y = s.selected_y - avail_height + 1
+					}
+				}
+				return
+			case tcell.KeyLeft:
+				if s.branchSearchCursor > 0 {
+					s.branchSearchCursor--
+				}
+				return
+			case tcell.KeyRight:
+				runes := []rune(s.branchSearchInput)
+				if s.branchSearchCursor < len(runes) {
+					s.branchSearchCursor++
+				}
+				return
+			case tcell.KeyBackspace, tcell.KeyBackspace2:
+				runes := []rune(s.branchSearchInput)
+				if s.branchSearchCursor > 0 && s.branchSearchCursor <= len(runes) {
+					runes = append(runes[:s.branchSearchCursor-1], runes[s.branchSearchCursor:]...)
+					s.branchSearchInput = string(runes)
+					s.branchSearchCursor--
+					s.selected_y = 0
+					s.scroll_y = 0
+					s.runBranchSearch()
+				}
+				return
+			case tcell.KeyDelete:
+				runes := []rune(s.branchSearchInput)
+				if s.branchSearchCursor < len(runes) {
+					runes = append(runes[:s.branchSearchCursor], runes[s.branchSearchCursor+1:]...)
+					s.branchSearchInput = string(runes)
+					s.selected_y = 0
+					s.scroll_y = 0
+					s.runBranchSearch()
+				}
+				return
+			case tcell.KeyRune:
+				ch := e.Rune()
+				runes := []rune(s.branchSearchInput)
+				runes = append(runes[:s.branchSearchCursor], append([]rune{ch}, runes[s.branchSearchCursor:]...)...)
+				s.branchSearchInput = string(runes)
+				s.branchSearchCursor++
+				s.selected_y = 0
+				s.scroll_y = 0
+				s.runBranchSearch()
+				return
+			}
+		}
 		return
 	}
 
@@ -859,6 +1072,26 @@ func (s *GitSidebarPane) HandleEvent(event tcell.Event) {
 
 		// Standard navigation & actions for non-commit-input rows
 		switch e.Key() {
+		case tcell.KeyDelete:
+			if selectedItem.itemType == "staged" || selectedItem.itemType == "change" {
+				InfoBar.YNPrompt("Discard all changes in "+selectedItem.path+"? (y,n)", func(yes, canceled bool) {
+					if !canceled && yes {
+						targetType, targetPath := s.findNextPrevOrNearestFile(selectedItem.path, selectedItem.itemType)
+						s.targetSelType = targetType
+						s.targetSelPath = targetPath
+
+						cmd := exec.Command("git", "checkout", "HEAD", "--", selectedItem.path)
+						cmd.Dir = s.root_dir
+						if err := cmd.Run(); err != nil {
+							fullPath := filepath.Join(s.root_dir, selectedItem.path)
+							_ = os.RemoveAll(fullPath)
+						}
+						s.refreshGitStatus(true)
+						s.rebuildRenderLines()
+					}
+				})
+			}
+			return
 		case tcell.KeyUp:
 			s.selectPrev()
 			return
@@ -887,6 +1120,15 @@ func (s *GitSidebarPane) HandleEvent(event tcell.Event) {
 
 			// Enter actions
 			switch selectedItem.itemType {
+			case "branch":
+				s.branchSearchMode = true
+				s.branchSearchInput = ""
+				s.branchSearchCursor = 0
+				s.selected_y = 0
+				s.scroll_y = 0
+				s.loadBranches()
+				s.runBranchSearch()
+				return
 			case "pull":
 				cmd := exec.Command("git", "pull")
 				cmd.Dir = s.root_dir
@@ -926,7 +1168,11 @@ func (s *GitSidebarPane) HandleEvent(event tcell.Event) {
 		_, my := e.Position()
 		btn := e.Buttons()
 		if btn == tcell.WheelDown {
-			if s.scroll_y < len(s.renderLines)-1 {
+			maxScroll := len(s.renderLines) - 1
+			if s.isGitRepo() {
+				maxScroll = len(s.renderLines) - 2
+			}
+			if s.scroll_y < maxScroll {
 				s.scroll_y++
 			}
 		} else if btn == tcell.WheelUp {
@@ -934,12 +1180,34 @@ func (s *GitSidebarPane) HandleEvent(event tcell.Event) {
 				s.scroll_y--
 			}
 		} else if btn == tcell.Button1 {
-			row_clicked := my - s.view.Y - 3 + s.scroll_y
-			if row_clicked >= 0 && row_clicked < len(s.renderLines) {
-				if s.renderLines[row_clicked].isSel {
-					s.selected_y = row_clicked
-					if s.renderLines[row_clicked].itemType == "commit" {
-						s.commitCursor = len([]rune(s.commitInput))
+			clickY := my - s.view.Y
+			if s.isGitRepo() && clickY == 1 {
+				// Clicked on branch name!
+				if s.selected_y == 0 {
+					s.branchSearchMode = true
+					s.branchSearchInput = ""
+					s.branchSearchCursor = 0
+					s.selected_y = 0
+					s.scroll_y = 0
+					s.loadBranches()
+					s.runBranchSearch()
+				} else {
+					s.selected_y = 0
+				}
+			} else {
+				row_clicked := clickY - 3 + s.scroll_y
+				if row_clicked >= 0 {
+					actualIndex := row_clicked
+					if s.isGitRepo() {
+						actualIndex = row_clicked + 1
+					}
+					if actualIndex >= 0 && actualIndex < len(s.renderLines) {
+						if s.renderLines[actualIndex].isSel {
+							s.selected_y = actualIndex
+							if s.renderLines[actualIndex].itemType == "commit" {
+								s.commitCursor = len([]rune(s.commitInput))
+							}
+						}
 					}
 				}
 			}
@@ -1000,3 +1268,38 @@ func (t *Tab) initGitSidebar(dir string) {
 	t.Resize()
 	t.SetActive(1)
 }
+
+func (s *GitSidebarPane) loadBranches() {
+	cmd := exec.Command("git", "branch", "-a", "--format=%(refname:short)")
+	cmd.Dir = s.root_dir
+	out, err := cmd.Output()
+	if err != nil {
+		s.allBranches = []string{}
+		return
+	}
+	lines := strings.Split(string(out), "\n")
+	var branches []string
+	seen := make(map[string]bool)
+	for _, line := range lines {
+		b := strings.TrimSpace(line)
+		if b == "" || strings.Contains(b, "HEAD ->") || strings.Contains(b, "/HEAD") {
+			continue
+		}
+		if !seen[b] {
+			seen[b] = true
+			branches = append(branches, b)
+		}
+	}
+	s.allBranches = branches
+}
+
+func (s *GitSidebarPane) runBranchSearch() {
+	s.branchSearchResults = []string{}
+	query := strings.ToLower(s.branchSearchInput)
+	for _, b := range s.allBranches {
+		if query == "" || strings.Contains(strings.ToLower(b), query) {
+			s.branchSearchResults = append(s.branchSearchResults, b)
+		}
+	}
+}
+
