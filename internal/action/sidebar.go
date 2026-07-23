@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
@@ -58,6 +59,9 @@ type SidebarPane struct {
 	search_input   string
 	search_cursor  int
 	search_results []SearchResult
+
+	closed bool
+	mutex  sync.Mutex
 }
 
 func NewSidebarPane(dir string, tab *Tab) *SidebarPane {
@@ -73,10 +77,19 @@ func NewSidebarPane(dir string, tab *Tab) *SidebarPane {
 		is_open: true,
 	}
 	s.loadNodeChildren(s.root_node)
+
+	go s.watchWorkspace()
+
 	return s
 }
 
 func (s *SidebarPane) updateGitStatus() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.updateGitStatusLocked()
+}
+
+func (s *SidebarPane) updateGitStatusLocked() {
 	if s.root_dir == "" { return }
 
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
@@ -152,14 +165,34 @@ func (s *SidebarPane) updateGitStatus() {
 }
 
 func (s *SidebarPane) getGitColor(node_path string) string {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	if s.git_status_cache == nil {
-		s.updateGitStatus()
+		s.updateGitStatusLocked()
 	} else if time.Since(s.last_git_refresh) > 2*time.Second {
-		s.updateGitStatus()
+		s.updateGitStatusLocked()
 	}
 
 	clean_path := filepath.Clean(node_path)
+	abs_path, err := filepath.Abs(clean_path)
+	if err == nil {
+		clean_path = abs_path
+	}
+	eval_path, err := filepath.EvalSymlinks(clean_path)
+	if err == nil {
+		clean_path = eval_path
+	}
 	if color, ok := s.git_status_cache[clean_path]; ok { return color }
+
+	abs_root_dir, err := filepath.Abs(s.root_dir)
+	if err == nil {
+		eval_root, err := filepath.EvalSymlinks(abs_root_dir)
+		if err == nil {
+			abs_root_dir = eval_root
+		}
+	} else {
+		abs_root_dir = s.root_dir
+	}
 
 	dir := filepath.Dir(clean_path)
 	for {
@@ -167,7 +200,7 @@ func (s *SidebarPane) getGitColor(node_path string) string {
 			return "brightblack"
 		}
 		parent := filepath.Dir(dir)
-		if parent == dir || !strings.HasPrefix(clean_path, s.root_dir) {
+		if parent == dir || !strings.HasPrefix(clean_path, abs_root_dir) {
 			break
 		}
 		dir = parent
@@ -300,7 +333,7 @@ func (s *SidebarPane) Display() {
 			screen.SetContent(s.view.X+x, s.view.Y+2, ' ', nil, config.DefStyle)
 		}
 
-		blue_color, _ := config.StringToColor("brightblue")
+		blue_color, _ := config.StringToColor("blue")
 		blue_style := config.DefStyle.Foreground(blue_color)
 
 		avail_height := s.view.Height - 3
@@ -323,12 +356,39 @@ func (s *SidebarPane) Display() {
 			}
 
 			if s.search_type == 0 {
-				runes := []rune(result.path)
+				dir_part := filepath.Dir(result.path)
+				base_part := filepath.Base(result.path)
+				
+				var display_str string
+				var dir_len int
+				if dir_part == "." || dir_part == "" {
+					display_str = base_part
+					dir_len = 0
+				} else {
+					display_str = dir_part + string(filepath.Separator) + base_part
+					dir_len = len([]rune(dir_part + string(filepath.Separator)))
+				}
+
+				runes := []rune(display_str)
+				offset := len(runes) - s.view.Width
+				if offset < 0 {
+					offset = 0
+				}
 				for x := 0; x < s.view.Width; x++ {
 					var r rune = ' '
-					var cur_style = line_style
-					if x < len(runes) {
-						r = runes[x]
+					var cur_style tcell.Style
+					orig_idx := x + offset
+					if index == s.selected_y {
+						cur_style = white_style.Reverse(true)
+					} else {
+						if orig_idx < dir_len {
+							cur_style = grey_style
+						} else {
+							cur_style = white_style
+						}
+					}
+					if orig_idx < len(runes) {
+						r = runes[orig_idx]
 					}
 					screen.SetContent(s.view.X+x, s.view.Y+y, r, nil, cur_style)
 				}
@@ -352,21 +412,26 @@ func (s *SidebarPane) Display() {
 					}
 				}
 
+				offset := len(runes) - s.view.Width
+				if offset < 0 {
+					offset = 0
+				}
 				for x := 0; x < s.view.Width; x++ {
 					var r rune = ' '
 					var cur_style = line_style
 
-					if x < len(runes) {
-						r = runes[x]
+					orig_idx := x + offset
+					if orig_idx < len(runes) {
+						r = runes[orig_idx]
 						if index == s.selected_y {
 							cur_style = line_style
 						} else {
-							if x < len(prefix) {
+							if orig_idx < len(prefix) {
 								cur_style = grey_style
 							} else {
 								is_match := false
 								for _, start_idx := range match_indices {
-									if x >= start_idx && x < start_idx+len(query) {
+									if orig_idx >= start_idx && orig_idx < start_idx+len(query) {
 										is_match = true
 										break
 									}
@@ -420,11 +485,6 @@ func (s *SidebarPane) Display() {
 		style := white_style
 
 		git_color := s.getGitColor(flat_node.node.path)
-		if git_color == "green" {
-			git_color = "brightgreen"
-		} else if git_color == "blue" {
-			git_color = "brightblue"
-		}
 
 		if git_color != "" {
 			if color, ok := config.StringToColor(git_color); ok {
@@ -746,6 +806,7 @@ func (s *SidebarPane) HandleEvent(event tcell.Event) {
 }
 
 func (s *SidebarPane) Quit() {
+	s.closed = true
 	if len(s.parent_tab.Panes) > 1 {
 		n := s.parent_tab.GetNode(s.ID())
 		n.Unsplit()
@@ -974,4 +1035,103 @@ func (s *SidebarPane) selectSearchResult(result SearchResult) {
 
 	s.search_mode = false
 	s.parent_tab.Resize()
+}
+
+func (s *SidebarPane) watchWorkspace() {
+	last_state := s.getWorkspaceState()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		if s.closed {
+			return
+		}
+		select {
+		case <-ticker.C:
+			if s.closed {
+				return
+			}
+			current_state := s.getWorkspaceState()
+			if !statesEqual(last_state, current_state) {
+				last_state = current_state
+				s.updateGitStatus()
+				s.mutex.Lock()
+				s.RefreshTree(s.root_node)
+				s.mutex.Unlock()
+				screen.Redraw()
+			}
+		}
+	}
+}
+
+func (s *SidebarPane) getWorkspaceState() map[string]int64 {
+	state := make(map[string]int64)
+	if s.root_dir == "" {
+		return state
+	}
+	_ = filepath.WalkDir(s.root_dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" {
+				return filepath.SkipDir
+			}
+		}
+		info, err := d.Info()
+		if err == nil {
+			state[path] = info.ModTime().UnixNano()
+		}
+		return nil
+	})
+	return state
+}
+
+func statesEqual(a, b map[string]int64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if bv, ok := b[k]; !ok || bv != v {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *SidebarPane) RefreshTree(node *FileNode) {
+	if !node.is_dir {
+		return
+	}
+	if len(node.children) > 0 {
+		new_children, err := readDir(node.path)
+		if err == nil {
+			open_dirs := make(map[string]bool)
+			for _, child := range node.children {
+				if child.is_dir && child.is_open {
+					open_dirs[child.name] = true
+				}
+			}
+
+			existing_nodes := make(map[string]*FileNode)
+			for _, child := range node.children {
+				existing_nodes[child.name] = child
+			}
+
+			node.children = new_children
+			for _, child := range node.children {
+				child.parent = node
+				if child.is_dir {
+					if open_dirs[child.name] {
+						child.is_open = true
+						if old_child, ok := existing_nodes[child.name]; ok {
+							child.children = old_child.children
+						}
+					}
+					s.RefreshTree(child)
+				}
+			}
+		}
+	}
 }

@@ -1,6 +1,7 @@
 VERSION = "1.0.0"
 
 function onBufferOpen(b)
+    b:SetOption("tabsize", "4")
     local ft = b:FileType()
 
     if ft == "go" or
