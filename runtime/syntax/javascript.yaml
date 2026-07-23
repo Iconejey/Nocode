@@ -1,17 +1,26 @@
 filetype: javascript
 
 detect:
-    filename: "(\\.(m|c)?js$|\\.es[5678]?$|\\.jsx$)"
+    filename: "(\\.(m|c)?jsx?$|\\.esx?[5678]?$)"
     header: '^#!.*/(env +)?node( |$)'
 
 rules:
+    # JSX Tag Patterns (Top-level, non-recursive)
+    - identifier.class: "<[a-zA-Z0-9_-]+\\.[A-Za-z0-9_.-]*"
+    - identifier.class: "</[a-zA-Z0-9_-]+\\.[A-Za-z0-9_.-]*>"
+    - identifier.class: '<[A-Z][A-Za-z0-9_.-]*'
+    - identifier.class: '</[A-Z][A-Za-z0-9_.-]*>'
+    - symbol.tag: '<[a-z][A-Za-z0-9_.-]*'
+    - symbol.tag: '</[a-z][A-Za-z0-9_.-]*>'
+    - symbol.tag: '/>'
+    - preproc: "\\b[a-zA-Z_][a-zA-Z0-9_-]*\\s*="
+
+    # Standard JavaScript syntax rules
     - constant.number: "\\b[-+]?([1-9][0-9]*|0[0-7]*|0x[0-9a-fA-F]+)([uU][lL]?|[lL][uU]?)?\\b"
     - constant.number: "\\b[-+]?([0-9]+\\.[0-9]*|[0-9]*\\.[0-9]+)([EePp][+-]?[0-9]+)?[fFlL]?"
     - constant.number: "\\b[-+]?([0-9]+[EePp][+-]?[0-9]+)[fFlL]?"
     - identifier.function: "\\b[A-Za-z_][A-Za-z0-9_]*\\s*\\("
     - identifier.function: "\\bfunction\\s+[A-Za-z_][A-Za-z0-9_]*"
-    #- identifier: "[A-Za-z_][A-Za-z0-9_]*[[:space:]]*[(]"
-    # ^ this is not correct usage of the identifier color
     - symbol.brackets: "[(){}]|\\[|\\]"
     - symbol.operator: '([-+/*=<>!~%?:&|]|[.]{3})'
     - statement: "\\b(async|await|break|case|catch|const|continue|debugger|default)\\b"
@@ -27,29 +36,35 @@ rules:
     - type: "\\b(Number|Object|Promise|Proxy|Reflect|RegExp|Set|String|Symbol|WeakMap|WeakSet)\\b"
     - type: "\\b(BigInt64Array|BigUint64Array|Float32Array|Float64Array|Int16Array)\\b"
 
-    - constant.string: "\\/[^\\s\\*]([^\\/\\n\\\\]|\\\\.)*\\/[gimuy]*"
+    - constant.string:
+          start: "(^|[-+/*=<>!~%?:&|([{,;]|\\s)/[^\\s\\*/]"
+          end: '/[gimuy]*|$'
+          skip: "\\\\."
     - constant: "\\\\[0-7][0-7]?[0-7]?|\\\\x[0-9a-fA-F]+|\\\\[bfnrt'\"\\?\\\\]"
     - comment: '^#!.*/(env +)?node( |$)'
 
     - identifier: "\\b(alert|decodeURI|decodeURIComponent|document|encodeURI|encodeURIComponent|escape|eval|isFinite|isNaN|parseFloat|parseInt|unescape|uneval|window)\\b"
+    - identifier: "\\b(Intl|WebAssembly)\\b"
+    - identifier: "\\b(Arguments)\\b"
 
     - constant.string:
           start: '"'
           end: '"'
-          skip: '\\\\.'
+          skip: "\\\\."
           rules:
               - constant.specialChar: "\\\\."
 
     - constant.string:
           start: "'"
           end: "'"
-          skip: '\\\\.'
+          skip: "\\\\."
           rules:
               - constant.specialChar: "\\\\."
 
     - constant.string:
           start: '`'
           end: '`'
+          skip: "\\\\."
           rules:
               - constant.specialChar: "\\\\."
               - identifier: "\\x24\\{.*?\\}"
@@ -70,4 +85,6 @@ rules:
           skip: "\\\\."
           rules:
               - constant.specialChar: "\\\\."
+              # function documentation
+              - identifier: "\\s\\*\\s.*"
               - todo: '(TODO|XXX|FIXME)'

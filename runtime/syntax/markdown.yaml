@@ -8,7 +8,7 @@ rules:
     - type: ".*[ :]\\|[ :].*"
 
       # quotes
-    - statement:  "^>.*"
+    - statement: '^>.*'
 
       # Emphasis
     - type: "(^|[[:space:]])(_[^ ][^_]*_|\\*[^ ][^*]*\\*)"
@@ -17,19 +17,19 @@ rules:
     - type: "(^|[[:space:]])(__[^ ][^_]*__|\\*\\*[^ ][^*]*\\*\\*)"
 
       # strike-through
-    - type: "(^|[[:space:]])~~[^ ][^~]*~~"
+    - type: '(^|[[:space:]])~~[^ ][^~]*~~'
 
       # horizontal rules
     - special: "^(---+|===+|___+|\\*\\*\\*+)\\s*$"
 
       # headlines
-    - special:  "^#{1,6}.*"
+    - special: '^#{1,6}.*'
 
       # lists
-    - identifier:   "^[[:space:]]*[\\*+-] |^[[:space:]]*[0-9]+\\. "
+    - identifier: "^[[:space:]]*[\\*+-] |^[[:space:]]*[0-9]+\\. "
 
       # misc
-    - preproc:   "(\\(([CcRr]|[Tt][Mm])\\)|\\.{3}|(^|[[:space:]])\\-\\-($|[[:space:]]))"
+    - preproc: "(\\(([CcRr]|[Tt][Mm])\\)|\\.{3}|(^|[[:space:]])\\-\\-($|[[:space:]]))"
 
       # links
     - constant: "\\[[^]]+\\]"
@@ -39,11 +39,14 @@ rules:
     - underlined: "!\\[[^][]*\\](\\([^)]+\\)|\\[[^]]+\\])"
 
       # urls
-    - underlined: "https?://[^ )>]+"
-
-    - special: "^```$"
+    - underlined: 'https?://[^ )>]+'
 
     - special:
-        start: "`"
-        end: "`"
-        rules: []
+          start: '^```'
+          end: '^```'
+          rules: []
+
+    - special:
+          start: '`'
+          end: '`'
+          rules: []
