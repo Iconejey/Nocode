@@ -301,9 +301,9 @@ func NewTabFromPane(x, y, width, height int, pane Pane) *Tab {
 func (t *Tab) HandleEvent(event tcell.Event) {
 	if e, ok := event.(*tcell.EventKey); ok {
 		isCtrlP := e.Key() == tcell.KeyCtrlP || (e.Key() == tcell.KeyRune && (e.Rune() == 'p' || e.Rune() == 'P') && e.Modifiers()&tcell.ModCtrl != 0)
-		isCtrlShiftF := (e.Key() == tcell.KeyCtrlF && e.Modifiers()&tcell.ModShift != 0) || (e.Key() == tcell.KeyRune && (e.Rune() == 'F' || e.Rune() == 'f') && e.Modifiers()&tcell.ModCtrl != 0 && e.Modifiers()&tcell.ModShift != 0)
+		isAltShiftF := (e.Key() == tcell.KeyRune && (e.Rune() == 'F' || e.Rune() == 'f') && e.Modifiers()&tcell.ModAlt != 0 && e.Modifiers()&tcell.ModShift != 0)
 
-		if isCtrlP || isCtrlShiftF {
+		if isCtrlP || isAltShiftF {
 			var sidebar *SidebarPane
 			for _, p := range t.Panes {
 				if s_pane, ok := p.(*SidebarPane); ok {

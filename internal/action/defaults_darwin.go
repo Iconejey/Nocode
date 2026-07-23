@@ -94,11 +94,12 @@ var bufdefaults = map[string]string{
 	// "Alt-n": "CursorDown",
 
 	// Integration with file managers
-	"F2":  "Save",
-	"F3":  "Find",
-	"F4":  "Quit",
-	"F7":  "Find",
-	"F10": "Quit",
+	"F2":        "Save",
+	"F3":        "FindNext",
+	"Shift-F3":  "FindPrevious",
+	"F4":        "Quit",
+	"F7":        "Find",
+	"F10":       "Quit",
 	"Esc": "Escape,Deselect,ClearInfo,RemoveAllMultiCursors,UnhighlightSearch",
 
 	// Mouse bindings
