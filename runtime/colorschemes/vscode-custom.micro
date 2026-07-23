@@ -10,6 +10,7 @@ color-link identifier.var "#EEFFFF"
 color-link constant "#F78C6C"
 color-link constant.string "#C3E88D"
 color-link constant.string.char "#C3E88D"
+color-link constant.string.regexp "#89DDFF"
 color-link constant.number "#F78C6C"
 color-link constant.bool "#F78C6C"
 

@@ -39,20 +39,20 @@ rules:
           rules:
               - todo: 'TODO:?'
 
-    - constant.string:
+    - constant.string.regexp:
           start: "(^|[-+/*=<>!~%?:&|([{,;]|\\s)/[^\\s\\*/]"
           end: '/[gimuy]*|$'
           skip: "\\\\."
 
     - constant.string:
           start: '"'
-          end: '"'
+          end: '"|$'
           skip: "\\\\."
           rules:
               - constant.specialChar: "\\\\."
     - constant.string:
           start: "'"
-          end: "'"
+          end: "'|$"
           skip: "\\\\."
           rules:
               - constant.specialChar: "\\\\."
