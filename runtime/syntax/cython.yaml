@@ -18,35 +18,34 @@ rules:
       # Parenthetical Color
     - symbol.brackets: "[(){}]|\\[|\\]"
 
-    - constant.string:
-        start: "\"\"\""
-        end: "\"\"\""
-        rules:
-            - constant.specialChar: "\\\\."
-
-    - constant.string:
-        start: "'''"
-        end: "'''"
-        rules:
-            - constant.specialChar: "\\\\."
-
-    - constant.string:
-        start: "\""
-        end: "\""
-        skip: "\\\\."
-        rules:
-            - constant.specialChar: "\\\\."
-
-    - constant.string:
-        start: "'"
-        end: "'"
-        skip: "\\\\."
-        rules:
-            - constant.specialChar: "\\\\."
+    - comment:
+          start: '"""'
+          end: '"""'
+          rules:
+              - constant.specialChar: "\\\\."
 
     - comment:
-        start: "#"
-        end: "$"
-        rules:
-            - todo: "(TODO|XXX|FIXME):?"
+          start: "'''"
+          end: "'''"
+          rules:
+              - constant.specialChar: "\\\\."
 
+    - constant.string:
+          start: '"'
+          end: '"'
+          skip: "\\\\."
+          rules:
+              - constant.specialChar: "\\\\."
+
+    - constant.string:
+          start: "'"
+          end: "'"
+          skip: "\\\\."
+          rules:
+              - constant.specialChar: "\\\\."
+
+    - comment:
+          start: '#'
+          end: '$'
+          rules:
+              - todo: '(TODO|XXX|FIXME):?'

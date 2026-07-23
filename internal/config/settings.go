@@ -61,7 +61,7 @@ var defaultCommonSettings = map[string]any{
 	"colorcolumn":     float64(0),
 	"cursorline":      false,
 	"detectlimit":     float64(100),
-	"diffgutter":      false,
+	"diffgutter":      true,
 	"encoding":        "utf-8",
 	"eofnewline":      true,
 	"fastdirty":       false,

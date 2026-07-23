@@ -70,6 +70,4 @@ rules:
           skip: "\\\\."
           rules:
               - constant.specialChar: "\\\\."
-              # function documentation
-              - identifier: "\\s\\*\\s.*"
               - todo: '(TODO|XXX|FIXME)'

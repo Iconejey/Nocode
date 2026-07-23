@@ -2,7 +2,7 @@ filetype: python
 
 detect:
     filename: "\\.py(3|w)?$"
-    header: "^#!.*/(env +)?python(3)?$"
+    header: '^#!.*/(env +)?python(3)?$'
 
 rules:
     # built-in objects
@@ -16,7 +16,7 @@ rules:
       # types
     - type: "\\b(bool|bytearray|bytes|classmethod|complex|dict|enumerate|filter|float|frozenset|int|list|map|memoryview|object|property|range|reversed|set|slice|staticmethod|str|super|tuple|type|zip)\\b"
       # definitions
-    - identifier: "def [a-zA-Z_0-9]+"
+    - identifier: 'def [a-zA-Z_0-9]+'
       # keywords
     - statement: "\\b(and|as|assert|async|await|break|case|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\b"
       # decorators
@@ -27,36 +27,36 @@ rules:
     - symbol.brackets: "([(){}]|\\[|\\])"
       # numbers
     - constant.number: "\\b[0-9](_?[0-9])*(\\.([0-9](_?[0-9])*)?)?(e[0-9](_?[0-9])*)?\\b" # decimal
-    - constant.number: "\\b0b(_?[01])+\\b"     # bin
-    - constant.number: "\\b0o(_?[0-7])+\\b"    # oct
+    - constant.number: "\\b0b(_?[01])+\\b" # bin
+    - constant.number: "\\b0o(_?[0-7])+\\b" # oct
     - constant.number: "\\b0x(_?[0-9a-fA-F])+\\b" # hex
 
-    - constant.string:
-        start: "\"\"\""
-        end: "\"\"\""
-        rules: []
-
-    - constant.string:
-        start: "'''"
-        end: "'''"
-        rules: []
-
-    - constant.string:
-        start: "\""
-        end: "(\"|$)"
-        skip: "\\\\."
-        rules:
-            - constant.specialChar: "\\\\."
-
-    - constant.string:
-        start: "'"
-        end: "('|$)"
-        skip: "\\\\."
-        rules:
-            - constant.specialChar: "\\\\."
+    - comment:
+          start: '"""'
+          end: '"""'
+          rules: []
 
     - comment:
-        start: "#"
-        end: "$"
-        rules:  # AKA Code tags (PEP 350)
-            - todo: "(TODO|FIXME|HACK|BUG|NOTE|FAQ|MNEMONIC|REQ|RFE|IDEA|PORT|\\?\\?\\?|!!!|GLOSS|SEE|TODOC|STAT|RVD|CRED):?"
+          start: "'''"
+          end: "'''"
+          rules: []
+
+    - constant.string:
+          start: '"'
+          end: '("|$)'
+          skip: "\\\\."
+          rules:
+              - constant.specialChar: "\\\\."
+
+    - constant.string:
+          start: "'"
+          end: "('|$)"
+          skip: "\\\\."
+          rules:
+              - constant.specialChar: "\\\\."
+
+    - comment:
+          start: '#'
+          end: '$'
+          rules: # AKA Code tags (PEP 350)
+              - todo: "(TODO|FIXME|HACK|BUG|NOTE|FAQ|MNEMONIC|REQ|RFE|IDEA|PORT|\\?\\?\\?|!!!|GLOSS|SEE|TODOC|STAT|RVD|CRED):?"

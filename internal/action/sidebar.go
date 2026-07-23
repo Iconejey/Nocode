@@ -2,9 +2,12 @@ package action
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/config"
@@ -38,6 +41,9 @@ type SidebarPane struct {
 	root_node   *FileNode
 	scroll_y    int
 	selected_y  int
+
+	git_status_cache map[string]string
+	last_git_refresh time.Time
 }
 
 func NewSidebarPane(dir string, tab *Tab) *SidebarPane {
@@ -54,6 +60,87 @@ func NewSidebarPane(dir string, tab *Tab) *SidebarPane {
 	}
 	s.loadNodeChildren(s.root_node)
 	return s
+}
+
+func (s *SidebarPane) updateGitStatus() {
+	if s.root_dir == "" { return }
+
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Dir = s.root_dir
+	out_bytes, err := cmd.Output()
+	if err != nil {
+		s.git_status_cache = make(map[string]string)
+		return
+	}
+
+	repo_root := strings.TrimSpace(string(out_bytes))
+	repo_root, err = filepath.EvalSymlinks(repo_root)
+	if err != nil { repo_root = strings.TrimSpace(string(out_bytes)) }
+
+	cmd = exec.Command("git", "status", "--porcelain", "-z")
+	cmd.Dir = s.root_dir
+	status_bytes, err := cmd.Output()
+	if err != nil {
+		s.git_status_cache = make(map[string]string)
+		return
+	}
+
+	new_cache := make(map[string]string)
+	parts := strings.Split(string(status_bytes), "\x00")
+
+	for i := 0; i < len(parts); i++ {
+		part := parts[i]
+		if len(part) < 4 { continue }
+		status := part[0:2]
+		path := part[3:]
+
+		if status[0] == 'R' || status[0] == 'C' {
+			i++
+			if i < len(parts) { path = parts[i] }
+		}
+
+		abs_path := filepath.Join(repo_root, path)
+		abs_path, err = filepath.EvalSymlinks(abs_path)
+		if err != nil { abs_path = filepath.Join(repo_root, path) }
+
+		color := ""
+		if status[0] == '?' || status[1] == '?' || status[0] == 'A' || status[1] == 'A' {
+			color = "green"
+		} else if status[0] == 'M' || status[1] == 'M' || status[0] == 'R' || status[1] == 'R' || status[0] == 'C' || status[1] == 'C' {
+			color = "blue"
+		}
+
+		if color != "" { new_cache[abs_path] = color }
+	}
+
+	folder_colors := make(map[string]string)
+	for file_path, color := range new_cache {
+		dir := filepath.Dir(file_path)
+		for {
+			if !strings.HasPrefix(dir, repo_root) || dir == filepath.Dir(dir) { break }
+			existing := folder_colors[dir]
+			if existing != "blue" { folder_colors[dir] = color }
+			dir = filepath.Dir(dir)
+		}
+	}
+
+	for dir_path, color := range folder_colors {
+		new_cache[dir_path] = color
+	}
+
+	s.git_status_cache = new_cache
+	s.last_git_refresh = time.Now()
+}
+
+func (s *SidebarPane) getGitColor(node_path string) string {
+	if s.git_status_cache == nil {
+		s.updateGitStatus()
+	} else if time.Since(s.last_git_refresh) > 2*time.Second {
+		s.updateGitStatus()
+	}
+
+	if color, ok := s.git_status_cache[filepath.Clean(node_path)]; ok { return color }
+	return ""
 }
 
 func (s *SidebarPane) loadNodeChildren(node *FileNode) {
@@ -143,7 +230,9 @@ func (s *SidebarPane) Display() {
 	// Line 0: Title
 	grey_color, _ := config.StringToColor("brightblack")
 	grey_style := config.DefStyle.Foreground(grey_color)
+	abs_dir, err := filepath.Abs(s.root_dir)
 	title_str := filepath.Base(s.root_dir)
+	if err == nil { title_str = filepath.Base(abs_dir) }
 	title_runes := []rune(title_str)
 	for x := 0; x < s.view.Width; x++ {
 		var r rune = ' '
@@ -170,6 +259,20 @@ func (s *SidebarPane) Display() {
 		}
 		flat_node := flat_nodes[index]
 		style := white_style
+
+		git_color := s.getGitColor(flat_node.node.path)
+		if git_color == "green" {
+			git_color = "brightgreen"
+		} else if git_color == "blue" {
+			git_color = "brightblue"
+		}
+
+		if git_color != "" {
+			if color, ok := config.StringToColor(git_color); ok {
+				style = config.DefStyle.Foreground(color)
+			}
+		}
+
 		if index == s.selected_y {
 			style = style.Reverse(true)
 		}
