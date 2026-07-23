@@ -247,8 +247,8 @@ func (s *GitSidebarPane) refreshGitStatus(force bool) {
 		}
 	}
 
-	// 4. Commits (last 50)
-	cmdCommits := exec.Command("git", "log", "-n", "50", "--pretty=format:%H %s")
+	// 4. Commits (last 40)
+	cmdCommits := exec.Command("git", "log", "-n", "40", "--pretty=format:%H %s")
 	cmdCommits.Dir = s.root_dir
 	outCommits, errCommits := cmdCommits.Output()
 	if errCommits == nil {
@@ -612,6 +612,10 @@ func (s *GitSidebarPane) findNextPrevOrNearestFile(currentPath string, currentTy
 
 func (s *GitSidebarPane) scrollToSelected() {
 	if s.selected_y < 0 || len(s.renderLines) == 0 {
+		return
+	}
+	if s.view.Height <= 0 {
+		s.scroll_y = 0
 		return
 	}
 	availHeight := s.view.Height - 3
