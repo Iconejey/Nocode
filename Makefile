@@ -78,5 +78,5 @@ clean:
 	rm -f micro
 
 release: build
-	rm -f /home/nicolas/.local/bin/nocode
-	cp nocode /home/nicolas/.local/bin/nocode
+	rm -f $(HOME)/.local/bin/nocode
+	cp nocode $(HOME)/.local/bin/nocode

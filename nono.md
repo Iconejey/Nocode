@@ -1,1 +1,1 @@
-Always build in release and update the `nocode` command when the task is done.
+Always use `make release` command when the task is done.

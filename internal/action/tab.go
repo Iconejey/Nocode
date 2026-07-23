@@ -1,6 +1,8 @@
 package action
 
 import (
+	"os"
+
 	luar "layeh.com/gopher-luar"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
@@ -297,6 +299,59 @@ func NewTabFromPane(x, y, width, height int, pane Pane) *Tab {
 // If the event is a mouse press event in a pane, that pane will become active
 // and get the event
 func (t *Tab) HandleEvent(event tcell.Event) {
+	if e, ok := event.(*tcell.EventKey); ok {
+		isCtrlP := e.Key() == tcell.KeyCtrlP || (e.Key() == tcell.KeyRune && (e.Rune() == 'p' || e.Rune() == 'P') && e.Modifiers()&tcell.ModCtrl != 0)
+		isCtrlShiftF := (e.Key() == tcell.KeyCtrlF && e.Modifiers()&tcell.ModShift != 0) || (e.Key() == tcell.KeyRune && (e.Rune() == 'F' || e.Rune() == 'f') && e.Modifiers()&tcell.ModCtrl != 0 && e.Modifiers()&tcell.ModShift != 0)
+
+		if isCtrlP || isCtrlShiftF {
+			var sidebar *SidebarPane
+			for _, p := range t.Panes {
+				if s_pane, ok := p.(*SidebarPane); ok {
+					sidebar = s_pane
+					break
+				}
+			}
+			if sidebar == nil {
+				dir := WorkspaceDir
+				if dir == "" {
+					var err error
+					dir, err = os.Getwd()
+					if err != nil {
+						dir = "."
+					}
+				}
+				t.initSidebar(dir)
+				for _, p := range t.Panes {
+					if s_pane, ok := p.(*SidebarPane); ok {
+						sidebar = s_pane
+						break
+					}
+				}
+			}
+
+			if sidebar != nil {
+				sidebar.search_mode = true
+				if isCtrlP {
+					sidebar.search_type = 0
+				} else {
+					sidebar.search_type = 1
+				}
+				sidebar.search_input = ""
+				sidebar.search_cursor = 0
+				sidebar.selected_y = 0
+				sidebar.scroll_y = 0
+				sidebar.search_results = nil
+				if sidebar.search_type == 0 {
+					sidebar.runFileSearch()
+				}
+				t.Resize()
+				idx := t.GetPane(sidebar.ID())
+				t.SetActive(idx)
+				return
+			}
+		}
+	}
+
 	switch e := event.(type) {
 	case *tcell.EventMouse:
 		mx, my := e.Position()
@@ -411,7 +466,11 @@ func (t *Tab) Resize() {
 	if sidebar != nil && len(t.Panes) > 1 {
 		node := t.GetNode(sidebar.ID())
 		if node != nil {
-			node.ResizeSplit(32)
+			if sidebar.search_mode {
+				node.ResizeSplit(64)
+			} else {
+				node.ResizeSplit(32)
+			}
 		}
 	}
 

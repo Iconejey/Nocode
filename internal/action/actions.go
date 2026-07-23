@@ -1859,6 +1859,13 @@ func (h *BufPane) ToggleSidebar() bool {
 			dir, _ = os.Getwd()
 		}
 		h.tab.initSidebar(dir)
+		for _, p := range h.tab.Panes {
+			if s_pane, ok := p.(*SidebarPane); ok {
+				idx := h.tab.GetPane(s_pane.ID())
+				h.tab.SetActive(idx)
+				break
+			}
+		}
 	}
 	return true
 }

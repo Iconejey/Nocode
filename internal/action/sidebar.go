@@ -1,11 +1,13 @@
 package action
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +33,12 @@ type FlatNode struct {
 	level int
 }
 
+type SearchResult struct {
+	path        string
+	line_number int
+	line        string
+}
+
 type SidebarPane struct {
 	view       *display.View
 	is_active  bool
@@ -44,6 +52,12 @@ type SidebarPane struct {
 
 	git_status_cache map[string]string
 	last_git_refresh time.Time
+
+	search_mode    bool
+	search_type    int // 0: file, 1: text
+	search_input   string
+	search_cursor  int
+	search_results []SearchResult
 }
 
 func NewSidebarPane(dir string, tab *Tab) *SidebarPane {
@@ -77,7 +91,7 @@ func (s *SidebarPane) updateGitStatus() {
 	repo_root, err = filepath.EvalSymlinks(repo_root)
 	if err != nil { repo_root = strings.TrimSpace(string(out_bytes)) }
 
-	cmd = exec.Command("git", "status", "--porcelain", "-z")
+	cmd = exec.Command("git", "status", "--ignored", "--porcelain", "-z")
 	cmd.Dir = s.root_dir
 	status_bytes, err := cmd.Output()
 	if err != nil {
@@ -108,6 +122,8 @@ func (s *SidebarPane) updateGitStatus() {
 			color = "green"
 		} else if status[0] == 'M' || status[1] == 'M' || status[0] == 'R' || status[1] == 'R' || status[0] == 'C' || status[1] == 'C' {
 			color = "blue"
+		} else if status[0] == '!' && status[1] == '!' {
+			color = "brightblack"
 		}
 
 		if color != "" { new_cache[abs_path] = color }
@@ -115,6 +131,9 @@ func (s *SidebarPane) updateGitStatus() {
 
 	folder_colors := make(map[string]string)
 	for file_path, color := range new_cache {
+		if color == "brightblack" {
+			continue
+		}
 		dir := filepath.Dir(file_path)
 		for {
 			if !strings.HasPrefix(dir, repo_root) || dir == filepath.Dir(dir) { break }
@@ -139,7 +158,21 @@ func (s *SidebarPane) getGitColor(node_path string) string {
 		s.updateGitStatus()
 	}
 
-	if color, ok := s.git_status_cache[filepath.Clean(node_path)]; ok { return color }
+	clean_path := filepath.Clean(node_path)
+	if color, ok := s.git_status_cache[clean_path]; ok { return color }
+
+	dir := filepath.Dir(clean_path)
+	for {
+		if color, ok := s.git_status_cache[dir]; ok && color == "brightblack" {
+			return "brightblack"
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir || !strings.HasPrefix(clean_path, s.root_dir) {
+			break
+		}
+		dir = parent
+	}
+
 	return ""
 }
 
@@ -226,6 +259,132 @@ func (s *SidebarPane) getFlatNodesForNode(node *FileNode, level int) []*FlatNode
 
 func (s *SidebarPane) Display() {
 	s.Clear()
+
+	if s.search_mode {
+		var title string
+		if s.search_type == 0 {
+			title = "FILE SEARCH"
+		} else {
+			title = "TEXT SEARCH"
+		}
+		grey_color, _ := config.StringToColor("brightblack")
+		grey_style := config.DefStyle.Foreground(grey_color)
+
+		for x := 0; x < s.view.Width; x++ {
+			var r rune = ' '
+			if x < len(title) {
+				r = rune(title[x])
+			}
+			screen.SetContent(s.view.X+x, s.view.Y, r, nil, grey_style)
+		}
+
+		prompt := "> "
+		input_str := prompt + s.search_input
+		input_runes := []rune(input_str)
+		white_color, _ := config.StringToColor("brightwhite")
+		white_style := config.DefStyle.Foreground(white_color)
+
+		for x := 0; x < s.view.Width; x++ {
+			var r rune = ' '
+			if x < len(input_runes) {
+				r = input_runes[x]
+			}
+			screen.SetContent(s.view.X+x, s.view.Y+1, r, nil, white_style)
+		}
+
+		if s.is_active {
+			screen.ShowCursor(s.view.X+len(prompt)+s.search_cursor, s.view.Y+1)
+		}
+
+		for x := 0; x < s.view.Width; x++ {
+			screen.SetContent(s.view.X+x, s.view.Y+2, ' ', nil, config.DefStyle)
+		}
+
+		blue_color, _ := config.StringToColor("brightblue")
+		blue_style := config.DefStyle.Foreground(blue_color)
+
+		avail_height := s.view.Height - 3
+		if avail_height < 1 {
+			avail_height = 1
+		}
+
+		for y := 3; y < s.view.Height; y++ {
+			index := (y - 3) + s.scroll_y
+			if index >= len(s.search_results) {
+				break
+			}
+			result := s.search_results[index]
+
+			var line_style tcell.Style
+			if index == s.selected_y {
+				line_style = white_style.Reverse(true)
+			} else {
+				line_style = white_style
+			}
+
+			if s.search_type == 0 {
+				runes := []rune(result.path)
+				for x := 0; x < s.view.Width; x++ {
+					var r rune = ' '
+					var cur_style = line_style
+					if x < len(runes) {
+						r = runes[x]
+					}
+					screen.SetContent(s.view.X+x, s.view.Y+y, r, nil, cur_style)
+				}
+			} else {
+				prefix := result.path + ":" + strconv.Itoa(result.line_number) + " "
+				full_str := prefix + result.line
+				runes := []rune(full_str)
+
+				query := strings.ToLower(s.search_input)
+				match_indices := []int{}
+				if query != "" {
+					line_lower := strings.ToLower(result.line)
+					start := 0
+					for {
+						idx := strings.Index(line_lower[start:], query)
+						if idx == -1 {
+							break
+						}
+						match_indices = append(match_indices, len(prefix)+start+idx)
+						start += idx + len(query)
+					}
+				}
+
+				for x := 0; x < s.view.Width; x++ {
+					var r rune = ' '
+					var cur_style = line_style
+
+					if x < len(runes) {
+						r = runes[x]
+						if index == s.selected_y {
+							cur_style = line_style
+						} else {
+							if x < len(prefix) {
+								cur_style = grey_style
+							} else {
+								is_match := false
+								for _, start_idx := range match_indices {
+									if x >= start_idx && x < start_idx+len(query) {
+										is_match = true
+										break
+									}
+								}
+								if is_match {
+									cur_style = blue_style
+								} else {
+									cur_style = line_style
+								}
+							}
+						}
+					}
+					screen.SetContent(s.view.X+x, s.view.Y+y, r, nil, cur_style)
+				}
+			}
+		}
+		return
+	}
 
 	// Line 0: Title
 	grey_color, _ := config.StringToColor("brightblack")
@@ -407,6 +566,125 @@ func (s *SidebarPane) openFileInWorkspace(path string) {
 }
 
 func (s *SidebarPane) HandleEvent(event tcell.Event) {
+	if s.search_mode {
+		if e, ok := event.(*tcell.EventKey); ok {
+			switch e.Key() {
+			case tcell.KeyEscape:
+				s.search_mode = false
+				s.parent_tab.Resize()
+				return
+			case tcell.KeyCtrlW:
+				s.Quit()
+				return
+			case tcell.KeyEnter:
+				if s.selected_y >= 0 && s.selected_y < len(s.search_results) {
+					s.selectSearchResult(s.search_results[s.selected_y])
+				}
+				return
+			case tcell.KeyUp:
+				if s.selected_y > 0 {
+					s.selected_y--
+					if s.selected_y < s.scroll_y {
+						s.scroll_y = s.selected_y
+					}
+				}
+				return
+			case tcell.KeyDown:
+				if s.selected_y < len(s.search_results)-1 {
+					s.selected_y++
+					avail_height := s.view.Height - 3
+					if avail_height < 1 {
+						avail_height = 1
+					}
+					if s.selected_y >= s.scroll_y+avail_height {
+						s.scroll_y = s.selected_y - avail_height + 1
+					}
+				}
+				return
+			case tcell.KeyLeft:
+				if s.search_cursor > 0 {
+					s.search_cursor--
+				}
+				return
+			case tcell.KeyRight:
+				runes := []rune(s.search_input)
+				if s.search_cursor < len(runes) {
+					s.search_cursor++
+				}
+				return
+			case tcell.KeyBackspace, tcell.KeyBackspace2:
+				runes := []rune(s.search_input)
+				if s.search_cursor > 0 && s.search_cursor <= len(runes) {
+					runes = append(runes[:s.search_cursor-1], runes[s.search_cursor:]...)
+					s.search_input = string(runes)
+					s.search_cursor--
+					s.selected_y = 0
+					s.scroll_y = 0
+					if s.search_type == 0 {
+						s.runFileSearch()
+					} else {
+						s.runTextSearch()
+					}
+				}
+				return
+			case tcell.KeyDelete:
+				runes := []rune(s.search_input)
+				if s.search_cursor < len(runes) {
+					runes = append(runes[:s.search_cursor], runes[s.search_cursor+1:]...)
+					s.search_input = string(runes)
+					s.selected_y = 0
+					s.scroll_y = 0
+					if s.search_type == 0 {
+						s.runFileSearch()
+					} else {
+						s.runTextSearch()
+					}
+				}
+				return
+			case tcell.KeyRune:
+				ch := e.Rune()
+				runes := []rune(s.search_input)
+				runes = append(runes[:s.search_cursor], append([]rune{ch}, runes[s.search_cursor:]...)...)
+				s.search_input = string(runes)
+				s.search_cursor++
+				s.selected_y = 0
+				s.scroll_y = 0
+				if s.search_type == 0 {
+					s.runFileSearch()
+				} else {
+					s.runTextSearch()
+				}
+				return
+			}
+		} else if e, ok := event.(*tcell.EventMouse); ok {
+			_, my := e.Position()
+			btn := e.Buttons()
+			avail_height := s.view.Height - 3
+			if avail_height < 1 {
+				avail_height = 1
+			}
+			if btn == tcell.WheelDown {
+				if s.scroll_y < len(s.search_results)-avail_height {
+					s.scroll_y++
+				}
+			} else if btn == tcell.WheelUp {
+				if s.scroll_y > 0 {
+					s.scroll_y--
+				}
+			} else if btn == tcell.Button1 {
+				y_clicked := my - s.view.Y
+				if y_clicked >= 3 {
+					row_clicked := (y_clicked - 3) + s.scroll_y
+					if row_clicked >= 0 && row_clicked < len(s.search_results) {
+						s.selected_y = row_clicked
+						s.selectSearchResult(s.search_results[row_clicked])
+					}
+				}
+			}
+		}
+		return
+	}
+
 	avail_height := s.view.Height - 2
 	if avail_height < 1 {
 		avail_height = 1
@@ -519,4 +797,181 @@ func NewTabWithSidebarOnly(x, y, width, height int, dir string) *Tab {
 	t.Panes = []Pane{s}
 	t.SetActive(0)
 	return t
+}
+
+func (s *SidebarPane) runFileSearch() {
+	s.search_results = nil
+	if s.root_dir == "" {
+		return
+	}
+	query := strings.ToLower(s.search_input)
+
+	_ = filepath.WalkDir(s.root_dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" {
+				return filepath.SkipDir
+			}
+			if s.getGitColor(path) == "brightblack" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if s.getGitColor(path) == "brightblack" {
+			return nil
+		}
+
+		rel, err := filepath.Rel(s.root_dir, path)
+		if err != nil {
+			rel = path
+		}
+
+		if query == "" || strings.Contains(strings.ToLower(rel), query) {
+			s.search_results = append(s.search_results, SearchResult{
+				path:        rel,
+				line_number: 0,
+				line:        "",
+			})
+			if len(s.search_results) >= 1000 {
+				return errors.New("limit reached")
+			}
+		}
+		return nil
+	})
+}
+
+func (s *SidebarPane) runTextSearch() {
+	s.search_results = nil
+	if s.root_dir == "" || s.search_input == "" {
+		return
+	}
+	query := strings.ToLower(s.search_input)
+
+	_ = filepath.WalkDir(s.root_dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if name == ".git" || name == "node_modules" || name == ".idea" || name == ".vscode" || name == "vendor" {
+				return filepath.SkipDir
+			}
+			if s.getGitColor(path) == "brightblack" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if s.getGitColor(path) == "brightblack" {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.Size() > 10*1024*1024 { // skip files larger than 10MB
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		// Heuristic: check if binary
+		isBinary := false
+		limit := 1024
+		if len(content) < limit {
+			limit = len(content)
+		}
+		for i := 0; i < limit; i++ {
+			if content[i] == 0 {
+				isBinary = true
+				break
+			}
+		}
+		if isBinary {
+			return nil
+		}
+
+		rel, err := filepath.Rel(s.root_dir, path)
+		if err != nil {
+			rel = path
+		}
+
+		lines := strings.Split(string(content), "\n")
+		for i, line := range lines {
+			line = strings.TrimSuffix(line, "\r")
+			if strings.Contains(strings.ToLower(line), query) {
+				s.search_results = append(s.search_results, SearchResult{
+					path:        rel,
+					line_number: i + 1,
+					line:        line,
+				})
+				if len(s.search_results) >= 1000 {
+					return errors.New("limit reached")
+				}
+			}
+		}
+		return nil
+	})
+}
+
+func (s *SidebarPane) selectSearchResult(result SearchResult) {
+	full_path := filepath.Join(s.root_dir, result.path)
+	b, err := buffer.NewBufferFromFile(full_path, buffer.BTDefault)
+	if err == nil {
+		active_editor_idx := -1
+		for i, p := range s.parent_tab.Panes {
+			if _, ok := p.(*BufPane); ok {
+				if p.IsActive() {
+					active_editor_idx = i
+					break
+				}
+			}
+		}
+
+		var bp *BufPane
+		if active_editor_idx != -1 {
+			bp = s.parent_tab.Panes[active_editor_idx].(*BufPane)
+			bp.VSplitBuf(b)
+		} else {
+			for _, p := range s.parent_tab.Panes {
+				if b_pane, ok := p.(*BufPane); ok {
+					bp = b_pane
+					break
+				}
+			}
+			if bp != nil {
+				bp.VSplitBuf(b)
+			} else {
+				bp = NewBufPaneFromBuf(b, s.parent_tab)
+				bp.splitID = s.parent_tab.GetNode(s.pane_id).VSplit(true)
+				s.parent_tab.AddPane(bp, 1)
+				s.parent_tab.Resize()
+				left_node := s.parent_tab.GetNode(s.ID())
+				if left_node != nil {
+					left_node.ResizeSplit(32)
+				}
+				s.parent_tab.SetActive(1)
+			}
+		}
+
+		if result.line_number > 0 && bp != nil {
+			bp.GotoLoc(buffer.Loc{X: 0, Y: result.line_number - 1})
+		}
+
+		if bp != nil {
+			idx := s.parent_tab.GetPane(bp.ID())
+			s.parent_tab.SetActive(idx)
+		}
+	}
+
+	s.search_mode = false
+	s.parent_tab.Resize()
 }

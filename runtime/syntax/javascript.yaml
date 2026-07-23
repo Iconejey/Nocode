@@ -1,7 +1,7 @@
 filetype: javascript
 
 detect:
-    filename: "(\\.(m|c)?js$|\\.es[5678]?$)"
+    filename: "(\\.(m|c)?js$|\\.es[5678]?$|\\.jsx$)"
     header: '^#!.*/(env +)?node( |$)'
 
 rules:
