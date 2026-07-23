@@ -312,6 +312,13 @@ func (t *Tab) HandleEvent(event tcell.Event) {
 				}
 			}
 			if sidebar == nil {
+				var gitSidebar *GitSidebarPane
+				for _, p := range t.Panes {
+					if gs, ok := p.(*GitSidebarPane); ok {
+						gitSidebar = gs
+						break
+					}
+				}
 				dir := WorkspaceDir
 				if dir == "" {
 					var err error
@@ -320,7 +327,17 @@ func (t *Tab) HandleEvent(event tcell.Event) {
 						dir = "."
 					}
 				}
-				t.initSidebar(dir)
+				if gitSidebar != nil {
+					if len(t.Panes) > 1 {
+						gitSidebar.Quit()
+						t.initSidebar(dir)
+					} else {
+						t.initSidebar(dir)
+						gitSidebar.Quit()
+					}
+				} else {
+					t.initSidebar(dir)
+				}
 				for _, p := range t.Panes {
 					if s_pane, ok := p.(*SidebarPane); ok {
 						sidebar = s_pane
@@ -471,6 +488,20 @@ func (t *Tab) Resize() {
 			} else {
 				node.ResizeSplit(32)
 			}
+		}
+	}
+
+	var gitSidebar *GitSidebarPane
+	for _, p := range t.Panes {
+		if s_pane, ok := p.(*GitSidebarPane); ok {
+			gitSidebar = s_pane
+			break
+		}
+	}
+	if gitSidebar != nil && len(t.Panes) > 1 {
+		node := t.GetNode(gitSidebar.ID())
+		if node != nil {
+			node.ResizeSplit(64)
 		}
 	}
 

@@ -69,7 +69,7 @@ var bufdefaults = map[string]string{
 	"CtrlPageDown":   "NextTab|FirstTab",
 	"ShiftPageUp":    "SelectPageUp",
 	"ShiftPageDown":  "SelectPageDown",
-	"Ctrl-g":         "ToggleHelp",
+	"Ctrl-g":         "ToggleGitSidebar",
 	"Alt-g":          "ToggleKeyMenu",
 	"Ctrl-r":         "ToggleRuler",
 	"Ctrl-l":         "command-edit:goto ",

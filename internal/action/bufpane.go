@@ -823,6 +823,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"EndOfLine":                 (*BufPane).EndOfLine,
 	"ToggleHelp":                (*BufPane).ToggleHelp,
 	"ToggleSidebar":             (*BufPane).ToggleSidebar,
+	"ToggleGitSidebar":          (*BufPane).ToggleGitSidebar,
 	"ToggleKeyMenu":             (*BufPane).ToggleKeyMenu,
 	"ToggleDiffGutter":          (*BufPane).ToggleDiffGutter,
 	"ToggleRuler":               (*BufPane).ToggleRuler,

@@ -1854,6 +1854,17 @@ func (h *BufPane) ToggleSidebar() bool {
 	if sidebar != nil {
 		sidebar.Quit()
 	} else {
+		var gitSidebar *GitSidebarPane
+		for _, p := range h.tab.Panes {
+			if s_pane, ok := p.(*GitSidebarPane); ok {
+				gitSidebar = s_pane
+				break
+			}
+		}
+		if gitSidebar != nil {
+			gitSidebar.Quit()
+		}
+
 		dir := WorkspaceDir
 		if dir == "" {
 			dir, _ = os.Getwd()
@@ -1861,6 +1872,45 @@ func (h *BufPane) ToggleSidebar() bool {
 		h.tab.initSidebar(dir)
 		for _, p := range h.tab.Panes {
 			if s_pane, ok := p.(*SidebarPane); ok {
+				idx := h.tab.GetPane(s_pane.ID())
+				h.tab.SetActive(idx)
+				break
+			}
+		}
+	}
+	return true
+}
+
+// ToggleGitSidebar opens or closes the git sidebar on the current tab
+func (h *BufPane) ToggleGitSidebar() bool {
+	var gitSidebar *GitSidebarPane
+	for _, p := range h.tab.Panes {
+		if s_pane, ok := p.(*GitSidebarPane); ok {
+			gitSidebar = s_pane
+			break
+		}
+	}
+	if gitSidebar != nil {
+		gitSidebar.Quit()
+	} else {
+		var otherSidebar *SidebarPane
+		for _, p := range h.tab.Panes {
+			if s_pane, ok := p.(*SidebarPane); ok {
+				otherSidebar = s_pane
+				break
+			}
+		}
+		if otherSidebar != nil {
+			otherSidebar.Quit()
+		}
+
+		dir := WorkspaceDir
+		if dir == "" {
+			dir, _ = os.Getwd()
+		}
+		h.tab.initGitSidebar(dir)
+		for _, p := range h.tab.Panes {
+			if s_pane, ok := p.(*GitSidebarPane); ok {
 				idx := h.tab.GetPane(s_pane.ID())
 				h.tab.SetActive(idx)
 				break

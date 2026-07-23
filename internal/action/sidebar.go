@@ -614,11 +614,11 @@ func (s *SidebarPane) openFileInWorkspace(path string) {
 				e := NewBufPaneFromBuf(b, s.parent_tab)
 				e.splitID = s.parent_tab.GetNode(s.pane_id).VSplit(true)
 				s.parent_tab.AddPane(e, 1)
-				s.parent_tab.Resize()
 				left_node := s.parent_tab.GetNode(s.ID())
 				if left_node != nil {
 					left_node.ResizeSplit(32)
 				}
+				s.parent_tab.Resize()
 				s.parent_tab.SetActive(1)
 			}
 		}
@@ -626,6 +626,20 @@ func (s *SidebarPane) openFileInWorkspace(path string) {
 }
 
 func (s *SidebarPane) HandleEvent(event tcell.Event) {
+	if e, ok := event.(*tcell.EventKey); ok {
+		if e.Key() == tcell.KeyCtrlG {
+			dir := s.root_dir
+			if len(s.parent_tab.Panes) > 1 {
+				s.Quit()
+				s.parent_tab.initGitSidebar(dir)
+			} else {
+				s.parent_tab.initGitSidebar(dir)
+				s.Quit()
+			}
+			return
+		}
+	}
+
 	if s.search_mode {
 		if e, ok := event.(*tcell.EventKey); ok {
 			switch e.Key() {
@@ -823,7 +837,20 @@ func (s *SidebarPane) Quit() {
 }
 
 func (t *Tab) initSidebar(dir string) {
-	orig_id := t.Node.ID()
+	var orig_id uint64
+	for _, p := range t.Panes {
+		if _, ok := p.(*BufPane); ok {
+			orig_id = p.ID()
+			break
+		}
+	}
+	if orig_id == 0 && len(t.Panes) > 0 {
+		orig_id = t.Panes[0].ID()
+	}
+	if orig_id == 0 {
+		orig_id = t.Node.ID()
+	}
+
 	s := NewSidebarPane(dir, t)
 	right_id := t.GetNode(orig_id).VSplit(true)
 	s.SetID(orig_id)
@@ -862,6 +889,9 @@ func NewTabWithSidebarOnly(x, y, width, height int, dir string) *Tab {
 
 func (s *SidebarPane) runFileSearch() {
 	s.search_results = nil
+	if len([]rune(s.search_input)) < 2 {
+		return
+	}
 	if s.root_dir == "" {
 		return
 	}
@@ -907,7 +937,10 @@ func (s *SidebarPane) runFileSearch() {
 
 func (s *SidebarPane) runTextSearch() {
 	s.search_results = nil
-	if s.root_dir == "" || s.search_input == "" {
+	if len([]rune(s.search_input)) < 2 {
+		return
+	}
+	if s.root_dir == "" {
 		return
 	}
 	query := strings.ToLower(s.search_input)
@@ -1014,11 +1047,11 @@ func (s *SidebarPane) selectSearchResult(result SearchResult) {
 				bp = NewBufPaneFromBuf(b, s.parent_tab)
 				bp.splitID = s.parent_tab.GetNode(s.pane_id).VSplit(true)
 				s.parent_tab.AddPane(bp, 1)
-				s.parent_tab.Resize()
 				left_node := s.parent_tab.GetNode(s.ID())
 				if left_node != nil {
 					left_node.ResizeSplit(32)
 				}
+				s.parent_tab.Resize()
 				s.parent_tab.SetActive(1)
 			}
 		}
