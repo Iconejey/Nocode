@@ -2508,7 +2508,12 @@ func (h *BufPane) SpawnKittyTab() bool {
 	nonoPath := filepath.Join(home, ".local/bin/nono")
 	argStr := fmt.Sprintf("%s:%d-%d", h.Buf.AbsPath, startLine, endLine)
 
-	runTabCommand([]string{nonoPath, "-f", argStr})
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "zsh"
+	}
+	cmdArgs := []string{shell, "-ic", fmt.Sprintf("%q -f %q; exec %q", nonoPath, argStr, shell)}
+	runTabCommand(cmdArgs)
 	return true
 }
 
