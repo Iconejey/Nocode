@@ -265,6 +265,12 @@ type Tab struct {
 	resizing *views.Node // node currently being resized
 	// captures whether the mouse is released
 	release bool
+
+	// SplitDiff fields
+	InSplitDiff bool
+	SavedNode   *views.Node
+	SavedPanes  []Pane
+	SavedActive int
 }
 
 // NewTabFromBuffer creates a new tab from the given buffer
@@ -525,4 +531,32 @@ func (t *Tab) CurPane() *BufPane {
 		return nil
 	}
 	return p
+}
+
+func (t *Tab) SyncSplitDiffScroll() {
+	if !t.InSplitDiff || len(t.Panes) < 2 {
+		return
+	}
+
+	left, ok1 := t.Panes[0].(*BufPane)
+	right, ok2 := t.Panes[1].(*BufPane)
+	if !ok1 || !ok2 {
+		return
+	}
+
+	var activePane, otherPane *BufPane
+	if t.active == 0 {
+		activePane = left
+		otherPane = right
+	} else {
+		activePane = right
+		otherPane = left
+	}
+
+	activeView := activePane.GetView()
+	otherView := otherPane.GetView()
+
+	otherView.StartLine = activeView.StartLine
+	otherView.StartCol = activeView.StartCol
+	otherPane.SetView(otherView)
 }

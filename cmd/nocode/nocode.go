@@ -521,6 +521,7 @@ func DoEvent() {
 	screen.Screen.Fill(' ', config.DefStyle)
 	screen.Screen.HideCursor()
 	action.Tabs.Display()
+	action.MainTab().SyncSplitDiffScroll()
 	for _, ep := range action.MainTab().Panes {
 		ep.Display()
 	}

@@ -2008,6 +2008,10 @@ func (h *BufPane) closePrompt(action string, callback func()) {
 
 // Quit this will close the current tab or view that is open
 func (h *BufPane) Quit() bool {
+	if h.tab.InSplitDiff {
+		h.SplitDiffAction()
+		return true
+	}
 	if h.Buf.Modified() && !h.Buf.Shared() {
 		if config.GlobalSettings["autosave"].(float64) > 0 && h.Buf.Path != "" {
 			// autosave on means we automatically save when quitting

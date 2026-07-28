@@ -33,6 +33,22 @@ var statusInfo = map[string]func(*buffer.Buffer) string{
 		return b.GetName()
 	},
 	"line": func(b *buffer.Buffer) string {
+		if b.InSplitDiff {
+			cy := b.GetActiveCursor().Y
+			if cy >= 0 && cy < len(b.DiffLines) {
+				realLineNum := b.DiffLines[cy].LineNum
+				if realLineNum > 0 {
+					return strconv.Itoa(realLineNum)
+				}
+				// If on dummy line, find the nearest preceding real line number
+				for i := cy; i >= 0; i-- {
+					if b.DiffLines[i].LineNum > 0 {
+						return strconv.Itoa(b.DiffLines[i].LineNum)
+					}
+				}
+				return "1"
+			}
+		}
 		return strconv.Itoa(b.GetActiveCursor().Y + 1)
 	},
 	"col": func(b *buffer.Buffer) string {
@@ -54,9 +70,32 @@ var statusInfo = map[string]func(*buffer.Buffer) string{
 		return ""
 	},
 	"lines": func(b *buffer.Buffer) string {
+		if b.InSplitDiff {
+			return strconv.Itoa(b.SharedBuffer.LinesNum())
+		}
 		return strconv.Itoa(b.LinesNum())
 	},
 	"percentage": func(b *buffer.Buffer) string {
+		if b.InSplitDiff {
+			cy := b.GetActiveCursor().Y
+			realY := 0
+			if cy >= 0 && cy < len(b.DiffLines) {
+				realY = b.DiffLines[cy].LineNum
+				if realY == 0 {
+					for i := cy; i >= 0; i-- {
+						if b.DiffLines[i].LineNum > 0 {
+							realY = b.DiffLines[i].LineNum
+							break
+						}
+					}
+				}
+			}
+			realLines := b.SharedBuffer.LinesNum()
+			if realLines > 0 {
+				return strconv.Itoa(realY * 100 / realLines)
+			}
+			return "0"
+		}
 		return strconv.Itoa((b.GetActiveCursor().Y + 1) * 100 / b.LinesNum())
 	},
 }

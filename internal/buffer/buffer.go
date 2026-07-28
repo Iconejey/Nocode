@@ -266,6 +266,45 @@ type Buffer struct {
 	// Insert key by default) i.e. that typing a character shall replace the
 	// character under the cursor instead of inserting a character before it.
 	OverwriteMode bool
+
+	// SplitDiff fields
+	InSplitDiff bool
+	IsLeftDiff  bool
+	DiffLines   []AlignedLine
+}
+
+type AlignedLine struct {
+	Type         int // 0: Equal, 1: Delete (removed), 2: Insert (added)
+	Content      string
+	LineNum      int // 1-based line number or 0 for dummy
+	ChangedChars []bool
+}
+
+const (
+	DiffEqual = 0
+	DiffDelete = 1
+	DiffInsert = 2
+)
+
+func (b *Buffer) DiffBase() []byte {
+	return b.diffBase
+}
+
+func (b *Buffer) LinesNum() int {
+	if b.InSplitDiff {
+		return len(b.DiffLines)
+	}
+	return b.SharedBuffer.LinesNum()
+}
+
+func (b *Buffer) LineBytes(lineN int) []byte {
+	if b.InSplitDiff {
+		if lineN >= 0 && lineN < len(b.DiffLines) {
+			return []byte(b.DiffLines[lineN].Content)
+		}
+		return []byte{}
+	}
+	return b.SharedBuffer.LineBytes(lineN)
 }
 
 // NewBufferFromFileWithCommand opens a new buffer with a given command
@@ -1202,7 +1241,7 @@ func (b *Buffer) findMatchingBrace(braceType [2]rune, start Loc, char rune) (Loc
 		}
 	} else if char == braceType[1] {
 		for y := start.Y; y >= 0; y-- {
-			l := []rune(string(b.lines[y].data))
+			l := []rune(string(b.LineBytes(y)))
 			xInit := len(l) - 1
 			if y == start.Y {
 				xInit = start.X
@@ -1421,15 +1460,23 @@ func (b *Buffer) SetDiffBase(diffBase []byte) {
 
 // DiffStatus returns the diff status for a line in the buffer
 func (b *Buffer) DiffStatus(lineN int) DiffStatus {
+	if b.InSplitDiff {
+		return DSUnchanged
+	}
 	b.diffLock.RLock()
 	defer b.diffLock.RUnlock()
-	// Note that the zero value for DiffStatus is equal to DSUnchanged
-	return b.diff[lineN]
+	if lineN >= 0 && lineN < len(b.diff) {
+		return b.diff[lineN]
+	}
+	return DSUnchanged
 }
 
 // FindNextDiffLine returns the line number of the next block of diffs.
 // If `startLine` is already in a block of diffs, lines in that block are skipped.
 func (b *Buffer) FindNextDiffLine(startLine int, forward bool) (int, error) {
+	if b.InSplitDiff {
+		return 0, errors.New("no diff data")
+	}
 	if b.diff == nil {
 		return 0, errors.New("no diff data")
 	}
@@ -1465,7 +1512,71 @@ func (b *Buffer) FindNextDiffLine(startLine int, forward bool) (int, error) {
 // SearchMatch returns true if the given location is within a match of the last search.
 // It is used for search highlighting
 func (b *Buffer) SearchMatch(pos Loc) bool {
+	if b.InSplitDiff {
+		if pos.Y >= 0 && pos.Y < len(b.DiffLines) && b.DiffLines[pos.Y].LineNum > 0 {
+			rawLineN := b.DiffLines[pos.Y].LineNum - 1
+			if rawLineN >= 0 && rawLineN < b.SharedBuffer.LinesNum() {
+				return b.LineArray.SearchMatch(b, Loc{pos.X, rawLineN})
+			}
+		}
+		return false
+	}
 	return b.LineArray.SearchMatch(b, pos)
+}
+
+func (b *Buffer) State(lineN int) highlight.State {
+	if b.InSplitDiff {
+		// Find the last real line up to lineN to propagate multiline block comments correctly
+		for i := lineN; i >= 0; i-- {
+			if i < len(b.DiffLines) && b.DiffLines[i].LineNum > 0 {
+				rawLineN := b.DiffLines[i].LineNum - 1
+				if rawLineN >= 0 && rawLineN < b.SharedBuffer.LinesNum() {
+					return b.SharedBuffer.State(rawLineN)
+				}
+			}
+		}
+		return nil
+	}
+	return b.SharedBuffer.State(lineN)
+}
+
+func (b *Buffer) SetState(lineN int, s highlight.State) {
+	if b.InSplitDiff {
+		if lineN >= 0 && lineN < len(b.DiffLines) && b.DiffLines[lineN].LineNum > 0 {
+			rawLineN := b.DiffLines[lineN].LineNum - 1
+			if rawLineN >= 0 && rawLineN < b.SharedBuffer.LinesNum() {
+				b.SharedBuffer.SetState(rawLineN, s)
+			}
+		}
+		return
+	}
+	b.SharedBuffer.SetState(lineN, s)
+}
+
+func (b *Buffer) SetMatch(lineN int, m highlight.LineMatch) {
+	if b.InSplitDiff {
+		if lineN >= 0 && lineN < len(b.DiffLines) && b.DiffLines[lineN].LineNum > 0 {
+			rawLineN := b.DiffLines[lineN].LineNum - 1
+			if rawLineN >= 0 && rawLineN < b.SharedBuffer.LinesNum() {
+				b.SharedBuffer.SetMatch(rawLineN, m)
+			}
+		}
+		return
+	}
+	b.SharedBuffer.SetMatch(lineN, m)
+}
+
+func (b *Buffer) Match(lineN int) highlight.LineMatch {
+	if b.InSplitDiff {
+		if lineN >= 0 && lineN < len(b.DiffLines) && b.DiffLines[lineN].LineNum > 0 {
+			rawLineN := b.DiffLines[lineN].LineNum - 1
+			if rawLineN >= 0 && rawLineN < b.SharedBuffer.LinesNum() {
+				return b.SharedBuffer.Match(rawLineN)
+			}
+		}
+		return nil
+	}
+	return b.SharedBuffer.Match(lineN)
 }
 
 // WriteLog writes a string to the log buffer

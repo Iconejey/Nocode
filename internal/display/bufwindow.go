@@ -330,12 +330,30 @@ func (w *BufWindow) drawDiffGutter(backgroundStyle tcell.Style, softwrapped bool
 func (w *BufWindow) drawLineNum(lineNumStyle tcell.Style, softwrapped bool, vloc *buffer.Loc, bloc *buffer.Loc) {
 	cursorLine := w.Buf.GetActiveCursor().Loc.Y
 	var lineInt int
-	if w.Buf.Settings["relativeruler"] == false || cursorLine == bloc.Y {
-		lineInt = bloc.Y + 1
+	isDummy := false
+	if w.Buf.InSplitDiff {
+		if bloc.Y >= 0 && bloc.Y < len(w.Buf.DiffLines) {
+			dl := w.Buf.DiffLines[bloc.Y]
+			if dl.LineNum == 0 {
+				isDummy = true
+			} else {
+				lineInt = dl.LineNum
+			}
+		}
 	} else {
-		lineInt = bloc.Y - cursorLine
+		if w.Buf.Settings["relativeruler"] == false || cursorLine == bloc.Y {
+			lineInt = bloc.Y + 1
+		} else {
+			lineInt = bloc.Y - cursorLine
+		}
 	}
-	lineNum := []rune(strconv.Itoa(util.Abs(lineInt)))
+
+	var lineNum []rune
+	if isDummy {
+		lineNum = []rune{}
+	} else {
+		lineNum = []rune(strconv.Itoa(util.Abs(lineInt)))
+	}
 
 	// Write the spaces before the line number if necessary
 	for i := 0; i < w.maxLineNumLength-len(lineNum) && vloc.X < w.gutterOffset; i++ {
@@ -507,6 +525,22 @@ func (w *BufWindow) displayBuffer() {
 			vloc.X = w.gutterOffset
 		}
 
+		if b.InSplitDiff && bloc.Y < len(b.DiffLines) {
+			dl := b.DiffLines[bloc.Y]
+			if dl.LineNum == 0 {
+				style := config.DefStyle.Foreground(tcell.GetColor("#363636"))
+				for col := 0; col < w.bufWidth; col++ {
+					screen.SetContent(w.X+w.gutterOffset+col, w.Y+vloc.Y, '╱', nil, style)
+				}
+				bloc.X = w.StartCol
+				bloc.Y++
+				if bloc.Y >= b.LinesNum() {
+					break
+				}
+				continue
+			}
+		}
+
 		bline := b.LineBytes(bloc.Y)
 		blineLen := util.CharacterCount(bline)
 
@@ -675,6 +709,24 @@ func (w *BufWindow) displayBuffer() {
 				}
 			}
 
+			if w.Buf.InSplitDiff && bloc.Y < len(w.Buf.DiffLines) {
+				dl := w.Buf.DiffLines[bloc.Y]
+				_, origBg, _ := style.Decompose()
+				if dl.Type == 1 { // DiffDelete (left/removed)
+					alpha := 0.1
+					if bloc.X >= 0 && bloc.X < len(dl.ChangedChars) && dl.ChangedChars[bloc.X] {
+						alpha = 0.2
+					}
+					style = style.Background(GetBlendColor(origBg, false, alpha))
+				} else if dl.Type == 2 { // DiffInsert (right/added)
+					alpha := 0.1
+					if bloc.X >= 0 && bloc.X < len(dl.ChangedChars) && dl.ChangedChars[bloc.X] {
+						alpha = 0.2
+					}
+					style = style.Background(GetBlendColor(origBg, true, alpha))
+				}
+			}
+
 			screen.SetContent(w.X+vloc.X, w.Y+vloc.Y, r, combc, style)
 
 			if showcursor {
@@ -822,6 +874,15 @@ func (w *BufWindow) displayBuffer() {
 					curStyle = style.Background(fg)
 				}
 			}
+			if w.Buf.InSplitDiff && bloc.Y < len(w.Buf.DiffLines) {
+				dl := w.Buf.DiffLines[bloc.Y]
+				_, origBg, _ := curStyle.Decompose()
+				if dl.Type == 1 { // DiffDelete (left/removed)
+					curStyle = curStyle.Background(GetBlendColor(origBg, false, 0.1))
+				} else if dl.Type == 2 { // DiffInsert (right/added)
+					curStyle = curStyle.Background(GetBlendColor(origBg, true, 0.1))
+				}
+			}
 			screen.SetContent(i+w.X, vloc.Y+w.Y, ' ', nil, curStyle)
 		}
 
@@ -900,4 +961,25 @@ func (w *BufWindow) Display() {
 	w.displayStatusLine()
 	w.displayScrollBar()
 	w.displayBuffer()
+}
+
+func GetBlendColor(bg tcell.Color, isGreen bool, alpha float64) tcell.Color {
+	r, g, b := bg.RGB()
+	if r < 0 || g < 0 || b < 0 {
+		// Fallback to dark background defaults if tcell defaults are set
+		r, g, b = 30, 30, 30
+	}
+	var tr, tg, tb int32
+	if isGreen {
+		tr, tg, tb = 0, 255, 0
+	} else {
+		tr, tg, tb = 255, 0, 0
+	}
+	nr := int32(float64(r)*(1-alpha) + float64(tr)*alpha)
+	ng := int32(float64(g)*(1-alpha) + float64(tg)*alpha)
+	nb := int32(float64(b)*(1-alpha) + float64(tb)*alpha)
+	if nr > 255 { nr = 255 }
+	if ng > 255 { ng = 255 }
+	if nb > 255 { nb = 255 }
+	return tcell.NewRGBColor(nr, ng, nb)
 }

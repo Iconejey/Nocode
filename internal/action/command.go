@@ -50,6 +50,7 @@ func InitCommands() {
 		"replaceall":  {(*BufPane).ReplaceAllCmd, nil},
 		"vsplit":      {(*BufPane).VSplitCmd, buffer.FileComplete},
 		"hsplit":      {(*BufPane).HSplitCmd, buffer.FileComplete},
+		"split-diff":  {(*BufPane).SplitDiffCmd, nil},
 		"tab":         {(*BufPane).NewTabCmd, buffer.FileComplete},
 		"help":        {(*BufPane).HelpCmd, HelpComplete},
 		"eval":        {(*BufPane).EvalCmd, nil},
