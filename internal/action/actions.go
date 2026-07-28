@@ -2538,7 +2538,7 @@ func detectTerminal() string {
 		}
 		name := strings.TrimSpace(string(comm))
 		switch name {
-		case "kitty", "gnome-terminal", "gnome-terminal-", "gnome-terminal-server", "kgx", "gnome-console", "konsole", "wezterm-gui", "wezterm", "alacritty", "xfce4-terminal", "foot":
+		case "kitty", "gnome-terminal", "gnome-terminal-", "gnome-terminal-server", "kgx", "gnome-console", "konsole", "wezterm-gui", "wezterm", "alacritty", "xfce4-terminal", "foot", "ptyxis", "ptyxis-agent":
 			return name
 		}
 
@@ -2570,6 +2570,9 @@ func detectTerminal() string {
 	if os.Getenv("GNOME_TERMINAL_SCREEN") != "" {
 		return "gnome-terminal"
 	}
+	if os.Getenv("PTYXIS_PROFILE") != "" || os.Getenv("PTYXIS_VERSION") != "" {
+		return "ptyxis"
+	}
 	return "unknown"
 }
 
@@ -2578,6 +2581,9 @@ func runTabCommand(cmdArgs []string) {
 	var execCmd *exec.Cmd
 
 	switch term {
+	case "ptyxis", "ptyxis-agent":
+		args := append([]string{"--tab", "--"}, cmdArgs...)
+		execCmd = exec.Command("ptyxis", args...)
 	case "kitty":
 		args := append([]string{"@", "launch", "--type=tab"}, cmdArgs...)
 		execCmd = exec.Command("kitten", args...)
@@ -2603,7 +2609,10 @@ func runTabCommand(cmdArgs []string) {
 		args := append([]string{"-e"}, cmdArgs...)
 		execCmd = exec.Command("foot", args...)
 	default:
-		if _, err := exec.LookPath("gnome-terminal"); err == nil {
+		if _, err := exec.LookPath("ptyxis"); err == nil {
+			args := append([]string{"--tab", "--"}, cmdArgs...)
+			execCmd = exec.Command("ptyxis", args...)
+		} else if _, err := exec.LookPath("gnome-terminal"); err == nil {
 			args := append([]string{"--tab", "--"}, cmdArgs...)
 			execCmd = exec.Command("gnome-terminal", args...)
 		} else if _, err := exec.LookPath("kgx"); err == nil {
