@@ -37,7 +37,7 @@ rules:
     - type: "\\b(BigInt64Array|BigUint64Array|Float32Array|Float64Array|Int16Array)\\b"
 
     - constant.string.regexp:
-          start: "(^|[-+/*=<>!~%?:&|([{,;]|\\s)/[^\\s\\*/]"
+          start: "(^|[-+/*=>!~%?:&|([{,;]|\\s)/[^\\s\\*/]"
           end: '/[gimuy]*|$'
           skip: "\\\\."
     - constant: "\\\\[0-7][0-7]?[0-7]?|\\\\x[0-9a-fA-F]+|\\\\[bfnrt'\"\\?\\\\]"
