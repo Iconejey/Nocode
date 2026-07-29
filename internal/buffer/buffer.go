@@ -1465,10 +1465,10 @@ func (b *Buffer) DiffStatus(lineN int) DiffStatus {
 	}
 	b.diffLock.RLock()
 	defer b.diffLock.RUnlock()
-	if lineN >= 0 && lineN < len(b.diff) {
-		return b.diff[lineN]
+	if b.diff == nil {
+		return DSUnchanged
 	}
-	return DSUnchanged
+	return b.diff[lineN]
 }
 
 // FindNextDiffLine returns the line number of the next block of diffs.

@@ -235,9 +235,11 @@ func TestMouse(t *testing.T) {
 
 	openFile(file)
 
-	if findBuffer(file) == nil {
+	buf := findBuffer(file)
+	if buf == nil {
 		t.Fatalf("Could not find buffer %s", file)
 	}
+	buf.Settings["diffgutter"] = false
 
 	// buffer:
 	// base content
