@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-errors/errors"
@@ -337,6 +338,65 @@ func TestMultiCursor(t *testing.T) {
 
 func TestSettingsPersistence(t *testing.T) {
 	// TODO
+}
+
+func TestPrettierConfigPresence(t *testing.T) {
+	// 1. Test without any prettier config (fallback settings should apply: single quotes)
+	tempDir := t.TempDir()
+	jsFile := filepath.Join(tempDir, "test.js")
+	err := os.WriteFile(jsFile, []byte("const a = \"hello\";"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	openFile(jsFile)
+	buf := findBuffer(jsFile)
+	if buf == nil {
+		t.Fatalf("Could not find buffer %s", jsFile)
+	}
+
+	// Trigger format on save
+	injectKey(tcell.KeyCtrlS, rune(tcell.KeyCtrlS), tcell.ModCtrl)
+
+	data, err := os.ReadFile(jsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Default/fallback Prettier flags has `--single-quote`, so "hello" should become 'hello'
+	assert.Contains(t, string(data), "'hello'")
+
+	// 2. Test with a prettier config (e.g., config forces double quotes)
+	configPath := filepath.Join(tempDir, ".prettierrc")
+	configContent := []byte(`{
+		"singleQuote": false,
+		"tabWidth": 2
+	}`)
+	err = os.WriteFile(configPath, configContent, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make an edit to dirty the buffer and trigger format on save again
+	// Delete 'hello' and type "hello"
+	injectKey(tcell.KeyEnd, 0, tcell.ModNone)
+	injectKey(tcell.KeyBackspace, rune(tcell.KeyBackspace), tcell.ModNone) // delete ;
+	injectKey(tcell.KeyBackspace, rune(tcell.KeyBackspace), tcell.ModNone) // delete '
+	injectKey(tcell.KeyBackspace, rune(tcell.KeyBackspace), tcell.ModNone) // delete o
+	injectKey(tcell.KeyBackspace, rune(tcell.KeyBackspace), tcell.ModNone) // delete l
+	injectKey(tcell.KeyBackspace, rune(tcell.KeyBackspace), tcell.ModNone) // delete l
+	injectKey(tcell.KeyBackspace, rune(tcell.KeyBackspace), tcell.ModNone) // delete e
+	injectKey(tcell.KeyBackspace, rune(tcell.KeyBackspace), tcell.ModNone) // delete h
+	injectKey(tcell.KeyBackspace, rune(tcell.KeyBackspace), tcell.ModNone) // delete '
+	injectString("\"hello\";")
+
+	injectKey(tcell.KeyCtrlS, rune(tcell.KeyCtrlS), tcell.ModCtrl)
+
+	data, err = os.ReadFile(jsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The .prettierrc config file specifies singleQuote: false, so it should keep "hello"
+	assert.Contains(t, string(data), "\"hello\"")
 }
 
 // more tests (rendering, tabs, plugins)?

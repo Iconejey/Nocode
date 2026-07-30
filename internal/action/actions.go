@@ -2450,17 +2450,33 @@ func (h *BufPane) runPrettier(filename string) {
 		"graphql": true, "gql": true,
 	}
 	if prettierExtensions[ext] {
-		cmd := exec.Command("prettier",
-			"--write",
-			"--log-level", "silent",
-			"--arrow-parens", "avoid",
-			"--print-width", "240",
-			"--single-quote",
-			"--tab-width", "4",
-			"--trailing-comma", "none",
-			"--use-tabs",
-			filename,
-		)
+		// Check if a prettier config is present for this file
+		hasConfig := false
+		configCmd := exec.Command("prettier", "--find-config-path", filename)
+		if err := configCmd.Run(); err == nil {
+			hasConfig = true
+		}
+
+		var cmd *exec.Cmd
+		if hasConfig {
+			cmd = exec.Command("prettier",
+				"--write",
+				"--log-level", "silent",
+				filename,
+			)
+		} else {
+			cmd = exec.Command("prettier",
+				"--write",
+				"--log-level", "silent",
+				"--arrow-parens", "avoid",
+				"--print-width", "240",
+				"--single-quote",
+				"--tab-width", "4",
+				"--trailing-comma", "none",
+				"--use-tabs",
+				filename,
+			)
+		}
 		if err := cmd.Run(); err == nil {
 			h.ReOpen()
 		}
