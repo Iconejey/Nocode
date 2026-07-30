@@ -133,7 +133,7 @@ func (h *Highlighter) highlightRegion(highlights LineMatch, start int, canMatchE
 	}
 	if searchNesting {
 		for _, r := range curRegion.rules.regions {
-			loc := findIndex(r.start, r.skip, line)
+			loc := findIndex(r.start, nil, line)
 			if loc != nil {
 				if loc[0] < firstLoc[0] {
 					firstLoc = loc
@@ -216,7 +216,7 @@ func (h *Highlighter) highlightEmptyRegion(highlights LineMatch, start int, canM
 	var firstRegion *region
 	firstLoc := []int{lineLen, 0}
 	for _, r := range h.Def.rules.regions {
-		loc := findIndex(r.start, r.skip, line)
+		loc := findIndex(r.start, nil, line)
 		if loc != nil {
 			if loc[0] < firstLoc[0] {
 				firstLoc = loc
