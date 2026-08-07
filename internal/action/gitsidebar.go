@@ -203,7 +203,7 @@ func (s *GitSidebarPane) refreshGitStatus(force bool) {
 	s.hasRemote = errRemote == nil && len(strings.TrimSpace(string(outRemote))) > 0
 
 	// 3. Staged & Unstaged files
-	cmdStatus := exec.Command("git", "status", "--porcelain")
+	cmdStatus := exec.Command("git", "status", "--porcelain", "-u")
 	cmdStatus.Dir = s.root_dir
 	outStatus, errStatus := cmdStatus.Output()
 	if errStatus == nil {
@@ -1160,7 +1160,13 @@ func (s *GitSidebarPane) HandleEvent(event tcell.Event) {
 				s.targetSelType = targetType
 				s.targetSelPath = targetPath
 
-				cmd := exec.Command("git", "add", selectedItem.path)
+				full_path := filepath.Join(s.root_dir, selectedItem.path)
+				var cmd *exec.Cmd
+				if _, err := os.Stat(full_path); os.IsNotExist(err) {
+					cmd = exec.Command("git", "rm", selectedItem.path)
+				} else {
+					cmd = exec.Command("git", "add", selectedItem.path)
+				}
 				cmd.Dir = s.root_dir
 				_ = cmd.Run()
 				s.refreshGitStatus(true)

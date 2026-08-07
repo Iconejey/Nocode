@@ -104,7 +104,7 @@ func (s *SidebarPane) updateGitStatusLocked() {
 	repo_root, err = filepath.EvalSymlinks(repo_root)
 	if err != nil { repo_root = strings.TrimSpace(string(out_bytes)) }
 
-	cmd = exec.Command("git", "status", "--ignored", "--porcelain", "-z")
+	cmd = exec.Command("git", "status", "--ignored", "--porcelain", "-z", "-u")
 	cmd.Dir = s.root_dir
 	status_bytes, err := cmd.Output()
 	if err != nil {
